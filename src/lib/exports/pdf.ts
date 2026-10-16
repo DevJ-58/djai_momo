@@ -1,0 +1,236 @@
+import { formatAmount, formatDate, toTitleCase } from '../format';
+import type { AgentOverview, RegistrationExportRow, RegistrationStatus } from '../../types/database';
+
+const STATUS_LABELS: Record<RegistrationStatus, string> = {
+  en_attente: 'En attente',
+  paye: 'Payé',
+  refuse: 'Refusé',
+  probleme: 'Problème',
+};
+
+const STATUS_COLORS: Record<RegistrationStatus, [number, number, number]> = {
+  en_attente: [14, 165, 233],
+  paye: [16, 185, 129],
+  refuse: [244, 63, 94],
+  probleme: [139, 92, 246],
+};
+
+export function sanitizePdfText(value: string): string {
+  return value
+    .replace(/[\u202F\u00A0]/g, ' ')
+    .replace(/[→➜➝]/g, '->')
+    .replace(/[←⇐]/g, '<-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[–—]/g, '-')
+    .replace(/[^\u0000-\u00FF]/g, '?');
+}
+
+function amountForPdf(amount: number | null): string {
+  return amount === null
+    ? '—'
+    : formatAmount(amount).replace(/[\u00A0\u202F]/g, ' ');
+}
+
+function generatedAt(): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'long',
+    timeStyle: 'short',
+  }).format(new Date());
+}
+
+function fileDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function slug(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('fr')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'utilisateur';
+}
+
+function statusLabel(status: RegistrationStatus): string {
+  return STATUS_LABELS[status];
+}
+
+function getTotals(rows: RegistrationExportRow[]) {
+  return {
+    total: rows.length,
+    paye: rows.filter((row) => row.status === 'paye').length,
+    en_attente: rows.filter((row) => row.status === 'en_attente').length,
+    refuse: rows.filter((row) => row.status === 'refuse').length,
+    probleme: rows.filter((row) => row.status === 'probleme').length,
+    montant: rows.reduce((sum, row) => sum + (row.status === 'paye' ? row.amount ?? 0 : 0), 0),
+  };
+}
+
+function drawHeader(doc: import('jspdf').jsPDF, title: string, subtitle: string, filtersLabel?: string) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFillColor(255, 201, 60);
+  doc.roundedRect(14, 12, 15, 15, 3, 3, 'F');
+  doc.setTextColor(31, 23, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('dm', 21.5, 21.5, { align: 'center' });
+  doc.setTextColor(28, 25, 23);
+  doc.setFontSize(18);
+  doc.text(sanitizePdfText(title), 35, 18);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(sanitizePdfText(subtitle), 35, 24);
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text(sanitizePdfText(`Généré le ${generatedAt()}`), 14, 34);
+  if (filtersLabel) doc.text(sanitizePdfText(`Filtres : ${filtersLabel}`), 14, 39, { maxWidth: pageWidth - 28 });
+  doc.setTextColor(28, 25, 23);
+}
+
+function drawStats(doc: import('jspdf').jsPDF, rows: RegistrationExportRow[], y: number): number {
+  const totals = getTotals(rows);
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const gap = 3;
+  const width = (pageWidth - 28 - gap * 5) / 6;
+  const stats = [
+    ['Total', String(totals.total)],
+    ['Payés', String(totals.paye)],
+    ['En attente', String(totals.en_attente)],
+    ['Refusés', String(totals.refuse)],
+    ['Problèmes', String(totals.probleme)],
+    ['Montant payé', amountForPdf(totals.montant)],
+  ];
+
+  stats.forEach(([label, value], index) => {
+    const x = 14 + index * (width + gap);
+    doc.setFillColor(255, 251, 235);
+    doc.setDrawColor(255, 229, 138);
+    doc.roundedRect(x, y, width, 16, 2, 2, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.setTextColor(100, 100, 100);
+    doc.text(sanitizePdfText(label), x + 2, y + 5);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(28, 25, 23);
+    doc.text(sanitizePdfText(value), x + 2, y + 11, { maxWidth: width - 4 });
+  });
+  return y + 21;
+}
+
+function addFooter(doc: import('jspdf').jsPDF) {
+  const pageCount = doc.getNumberOfPages();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setDrawColor(255, 229, 138);
+    doc.setLineWidth(0.3);
+    doc.line(14, pageHeight - 14, pageWidth - 14, pageHeight - 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text('djai_momo · Données de simulation', 14, pageHeight - 8);
+    doc.text(`Page ${page} / ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+  }
+}
+
+export type GenerateRegistrationsPdfOptions = {
+  rows: RegistrationExportRow[];
+  title: string;
+  subtitle: string;
+  filtersLabel: string;
+  includePasswords: boolean;
+  includeStats: boolean;
+  filename?: string;
+};
+
+export async function generateRegistrationsPdf(options: GenerateRegistrationsPdfOptions): Promise<void> {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const doc = new jsPDF({ orientation: options.includePasswords ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  let startY = options.filtersLabel.length > 0 ? 44 : 39;
+  if (options.includeStats) startY = drawStats(doc, options.rows, startY);
+
+  const columns = [
+    'Agent',
+    'N°',
+    'Email',
+    'Statut',
+    'Montant',
+    'Date',
+    ...(options.includePasswords ? ['Mot de passe'] : []),
+  ];
+  const body = options.rows.map((row) => [
+    sanitizePdfText(toTitleCase(row.profiles?.full_name ?? '—')),
+    String(row.seq),
+    sanitizePdfText(row.email),
+    statusLabel(row.status),
+    amountForPdf(row.status === 'paye' ? row.amount : null),
+    sanitizePdfText(formatDate(row.created_at)),
+    ...(options.includePasswords ? [sanitizePdfText(row.mdp)] : []),
+  ]);
+
+  autoTableModule.default(doc, {
+    startY,
+    head: [columns],
+    body,
+    margin: { top: 44, right: 14, bottom: 19, left: 14 },
+    willDrawPage: () => drawHeader(doc, options.title, options.subtitle, options.filtersLabel),
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 2, overflow: 'linebreak', textColor: [28, 25, 23] },
+    headStyles: { fillColor: [255, 201, 60], textColor: [31, 23, 0], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [255, 251, 235] },
+    columnStyles: { 1: { halign: 'center' }, 4: { halign: 'right' } },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 3) {
+        const row = options.rows[data.row.index];
+        data.cell.styles.textColor = STATUS_COLORS[row.status];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+  addFooter(doc);
+  doc.save(options.filename ?? `djai_momo_enregistres_${fileDate()}.pdf`);
+}
+
+export async function generateAgentsSummaryPdf({ rows }: { rows: AgentOverview[] }): Promise<void> {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const body = rows.map((row) => [
+    sanitizePdfText(toTitleCase(row.full_name)),
+    sanitizePdfText(row.whatsapp),
+    row.is_suspended ? 'Suspendu' : 'Actif',
+    String(row.total),
+    String(row.payes),
+    String(row.en_attente),
+    amountForPdf(row.montant_total),
+    sanitizePdfText(row.last_activity ? formatDate(row.last_activity) : '—'),
+  ]);
+  autoTableModule.default(doc, {
+    startY: 42,
+    head: [['Utilisateur', 'WhatsApp', 'Compte', 'Enregistrés', 'Payés', 'En attente', 'Montant payé', 'Dernière activité']],
+    body,
+    margin: { top: 42, right: 14, bottom: 19, left: 14 },
+    willDrawPage: () => drawHeader(doc, 'Récapitulatif des utilisateurs', 'Synthèse des comptes et des enregistrements fictifs.'),
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+    headStyles: { fillColor: [255, 201, 60], textColor: [31, 23, 0], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [255, 251, 235] },
+    columnStyles: { 6: { halign: 'right' } },
+  });
+  addFooter(doc);
+  doc.save(`djai_momo_utilisateurs_${fileDate()}.pdf`);
+}
+
+export function registrationStatusPdfLabel(status: RegistrationStatus): string {
+  return statusLabel(status);
+}
+
+export function agentPdfFilename(agentName: string): string {
+  return `djai_momo_${slug(agentName)}_${fileDate()}.pdf`;
+}
