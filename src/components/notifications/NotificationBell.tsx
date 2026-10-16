@@ -10,23 +10,35 @@ import {
 } from '../../hooks/useNotifications';
 import { Button, Skeleton } from '../ui';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useAuth } from '../../hooks/useAuth';
+import { BottomNavItem } from '../layout/BottomNavItem';
 
 type AgentNotificationsProps = {
   placement: 'sidebar' | 'mobile';
 };
 
-export function AgentNotifications({ placement }: AgentNotificationsProps) {
+export function NotificationBell({ placement }: AgentNotificationsProps) {
   const [open, setOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [badgeAnimationVersion, setBadgeAnimationVersion] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
+  const { role } = useAuth();
   const notifications = useNotifications();
   const unreadCount = useUnreadNotificationsCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const online = useOnlineStatus();
   const count = unreadCount.data ?? 0;
+  const previousCount = useRef(count);
+
+  useEffect(() => {
+    if (count > previousCount.current) {
+      setBadgeAnimationVersion((version) => version + 1);
+    }
+    previousCount.current = count;
+  }, [count]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,7 +94,8 @@ export function AgentNotifications({ placement }: AgentNotificationsProps) {
       if (!readAt) await markRead.markRead(notificationId);
       setOpen(false);
       if (registrationId) {
-        navigate(`/espace?registration=${encodeURIComponent(registrationId)}`);
+        const destination = role === 'admin' ? '/admin/enregistres' : '/espace';
+        navigate(`${destination}?registration=${encodeURIComponent(registrationId)}`);
       }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.');
@@ -98,26 +111,51 @@ export function AgentNotifications({ placement }: AgentNotificationsProps) {
     }
   };
 
-  const ariaLabel = unreadCount.isError
-    ? 'Notifications, nombre de non lues indisponible'
+  const ariaLabel = count === 0
+    ? 'Notifications'
     : `Notifications, ${count} non lue${count === 1 ? '' : 's'}`;
+  const icon = (
+    <span className="agent-notifications-icon">
+      <Bell size={24} aria-hidden="true" />
+      {count > 0 && (
+        <span
+          key={badgeAnimationVersion}
+          className="agent-notifications-badge"
+          aria-hidden="true"
+        >
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </span>
+  );
 
   return (
     <div className={`agent-notifications agent-notifications-${placement}`} ref={rootRef}>
-      <button
-        type="button"
-        className={`agent-notifications-trigger ${placement === 'mobile' ? 'mobile-nav-link' : 'nav-link'}`}
-        onClick={openNotifications}
-        aria-label={ariaLabel}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        <span className="agent-notifications-icon">
-          <Bell size={20} aria-hidden="true" />
-          {count > 0 && <span className="agent-notifications-badge" aria-hidden="true">{count > 9 ? '9+' : count}</span>}
-        </span>
-        <span>Notifications</span>
-      </button>
+      {placement === 'mobile' ? (
+        <BottomNavItem
+          icon={icon}
+          label="Alertes"
+          accessibleLabel={ariaLabel}
+          title="Notifications"
+          active={open}
+          onClick={openNotifications}
+          ariaHasPopup="dialog"
+          ariaExpanded={open}
+        />
+      ) : (
+        <button
+          type="button"
+          className={`agent-notifications-trigger nav-link ${open ? 'nav-link-active' : ''}`}
+          onClick={openNotifications}
+          aria-label={ariaLabel}
+          title="Notifications"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          {icon}
+          <span>Notifications</span>
+        </button>
+      )}
       {open && (
         <section
           className={`agent-notifications-panel agent-notifications-panel-${placement}`}

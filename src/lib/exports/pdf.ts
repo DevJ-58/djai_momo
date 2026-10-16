@@ -1,5 +1,6 @@
 import { formatAmount, formatDate, toTitleCase } from '../format';
 import type { AgentOverview, RegistrationExportRow, RegistrationStatus } from '../../types/database';
+import { APP_NAME } from '../brand';
 
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   en_attente: 'En attente',
@@ -67,14 +68,32 @@ function getTotals(rows: RegistrationExportRow[]) {
   };
 }
 
-function drawHeader(doc: import('jspdf').jsPDF, title: string, subtitle: string, filtersLabel?: string) {
+async function loadLogoDataUrl(): Promise<string> {
+  const response = await fetch('/logo.png');
+  if (!response.ok) throw new Error(`Chargement du logo impossible : ${response.status}`);
+  const logo = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('Conversion du logo en image impossible.'));
+    reader.onerror = () => reject(reader.error ?? new Error('Lecture du logo impossible.'));
+    reader.readAsDataURL(logo);
+  });
+}
+
+function drawHeader(doc: import('jspdf').jsPDF, title: string, subtitle: string, logoDataUrl: string | null, filtersLabel?: string) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  doc.setFillColor(255, 201, 60);
-  doc.roundedRect(14, 12, 15, 15, 3, 3, 'F');
-  doc.setTextColor(31, 23, 0);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('dm', 21.5, 21.5, { align: 'center' });
+  if (logoDataUrl) {
+    const { width, height } = doc.getImageProperties(logoDataUrl);
+    const logoHeight = 14;
+    doc.addImage(logoDataUrl, 'PNG', 14, 12, logoHeight * width / height, logoHeight);
+  } else {
+    doc.setTextColor(28, 25, 23);
+    doc.setFontSize(12);
+    doc.text(APP_NAME, 14, 21.5);
+  }
   doc.setTextColor(28, 25, 23);
   doc.setFontSize(18);
   doc.text(sanitizePdfText(title), 35, 18);
@@ -131,7 +150,7 @@ function addFooter(doc: import('jspdf').jsPDF) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
-    doc.text('djai_momo · Données de simulation', 14, pageHeight - 8);
+    doc.text(`${APP_NAME} · Données de simulation`, 14, pageHeight - 8);
     doc.text(`Page ${page} / ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
   }
 }
@@ -152,6 +171,12 @@ export async function generateRegistrationsPdf(options: GenerateRegistrationsPdf
     import('jspdf-autotable'),
   ]);
   const doc = new jsPDF({ orientation: options.includePasswords ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  let logoDataUrl: string | null = null;
+  try {
+    logoDataUrl = await loadLogoDataUrl();
+  } catch (error) {
+    console.warn('Le logo ne peut pas être ajouté au PDF ; le nom de marque sera affiché à la place.', error);
+  }
   let startY = options.filtersLabel.length > 0 ? 44 : 39;
   if (options.includeStats) startY = drawStats(doc, options.rows, startY);
 
@@ -179,7 +204,7 @@ export async function generateRegistrationsPdf(options: GenerateRegistrationsPdf
     head: [columns],
     body,
     margin: { top: 44, right: 14, bottom: 19, left: 14 },
-    willDrawPage: () => drawHeader(doc, options.title, options.subtitle, options.filtersLabel),
+    willDrawPage: () => drawHeader(doc, options.title, options.subtitle, logoDataUrl, options.filtersLabel),
     styles: { font: 'helvetica', fontSize: 9, cellPadding: 2, overflow: 'linebreak', textColor: [28, 25, 23] },
     headStyles: { fillColor: [255, 201, 60], textColor: [31, 23, 0], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [255, 251, 235] },
@@ -193,7 +218,7 @@ export async function generateRegistrationsPdf(options: GenerateRegistrationsPdf
     },
   });
   addFooter(doc);
-  doc.save(options.filename ?? `djai_momo_enregistres_${fileDate()}.pdf`);
+  doc.save(options.filename ?? `${APP_NAME}_enregistres_${fileDate()}.pdf`);
 }
 
 export async function generateAgentsSummaryPdf({ rows }: { rows: AgentOverview[] }): Promise<void> {
@@ -202,6 +227,12 @@ export async function generateAgentsSummaryPdf({ rows }: { rows: AgentOverview[]
     import('jspdf-autotable'),
   ]);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  let logoDataUrl: string | null = null;
+  try {
+    logoDataUrl = await loadLogoDataUrl();
+  } catch (error) {
+    console.warn('Le logo ne peut pas être ajouté au PDF ; le nom de marque sera affiché à la place.', error);
+  }
   const body = rows.map((row) => [
     sanitizePdfText(toTitleCase(row.full_name)),
     sanitizePdfText(row.whatsapp),
@@ -217,14 +248,14 @@ export async function generateAgentsSummaryPdf({ rows }: { rows: AgentOverview[]
     head: [['Utilisateur', 'WhatsApp', 'Compte', 'Enregistrés', 'Payés', 'En attente', 'Montant payé', 'Dernière activité']],
     body,
     margin: { top: 42, right: 14, bottom: 19, left: 14 },
-    willDrawPage: () => drawHeader(doc, 'Récapitulatif des utilisateurs', 'Synthèse des comptes et des enregistrements fictifs.'),
+    willDrawPage: () => drawHeader(doc, 'Récapitulatif des utilisateurs', 'Synthèse des comptes et des enregistrements fictifs.', logoDataUrl),
     styles: { font: 'helvetica', fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
     headStyles: { fillColor: [255, 201, 60], textColor: [31, 23, 0], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [255, 251, 235] },
     columnStyles: { 6: { halign: 'right' } },
   });
   addFooter(doc);
-  doc.save(`djai_momo_utilisateurs_${fileDate()}.pdf`);
+  doc.save(`${APP_NAME}_utilisateurs_${fileDate()}.pdf`);
 }
 
 export function registrationStatusPdfLabel(status: RegistrationStatus): string {
@@ -232,5 +263,5 @@ export function registrationStatusPdfLabel(status: RegistrationStatus): string {
 }
 
 export function agentPdfFilename(agentName: string): string {
-  return `djai_momo_${slug(agentName)}_${fileDate()}.pdf`;
+  return `${APP_NAME}_${slug(agentName)}_${fileDate()}.pdf`;
 }

@@ -9,6 +9,7 @@ import { Button, Input } from '../components/ui';
 import { AuthPageFrame } from './LoginPage';
 import { passwordSchema, translatedAuthMessage } from '../lib/auth-validation';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { APP_NAME } from '../lib/brand';
 
 const signupSchema = z.object({
   fullName: z.string().trim().min(2, 'Le nom doit contenir au moins 2 caractères.'),
@@ -95,7 +96,7 @@ export function SignupPage() {
   }
 
   return (
-    <AuthPageFrame eyebrow="VOTRE ESPACE VOUS ATTEND" title="Bienvenue chez djai_momo." description="Quelques informations et votre espace sera prêt.">
+    <AuthPageFrame eyebrow="VOTRE ESPACE VOUS ATTEND" title={`Bienvenue chez ${APP_NAME}.`} description="Quelques informations et votre espace sera prêt.">
       <form className="auth-form" onSubmit={onSubmit} noValidate>
         {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour créer votre compte.</p>}
         <Input

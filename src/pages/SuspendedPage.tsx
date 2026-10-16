@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { Button, Card } from '../components/ui';
+import { Button, Card, Logo } from '../components/ui';
 
 export function SuspendedPage() {
   const { signOut } = useAuth();
@@ -25,6 +25,7 @@ export function SuspendedPage() {
   return (
     <main className="route-message-page">
       <Card className="route-message-card">
+        <Logo variant="full" className="suspended-logo" />
         <span className="section-kicker">COMPTE SUSPENDU</span>
         <h1>Votre compte est temporairement suspendu.</h1>
         <p>Veuillez contacter l’administrateur pour obtenir de l’aide et rétablir votre accès.</p>

@@ -7,7 +7,6 @@ import {
   Eye,
   FileDown,
   Inbox,
-  MoreHorizontal,
   Phone,
   RefreshCw,
   Search,
@@ -24,6 +23,7 @@ import { ExportPdfModal } from '../components/exports/ExportPdfModal';
 import { WhatsAppExportModal } from '../components/exports/WhatsAppExportModal';
 import {
   Avatar,
+  ActionMenu,
   Badge,
   Button,
   Card,
@@ -648,32 +648,34 @@ function AgentActionMenu({
   notExportedCount: number;
   online: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="admin-action-menu">
-      <button
-        className="admin-action-trigger"
-        type="button"
-        aria-label={`Actions pour ${toTitleCase(agent.full_name)}`}
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <MoreHorizontal size={20} aria-hidden="true" />
-      </button>
-      {open && (
-        <div className="admin-action-popover">
-          <a href={whatsappUrl(agent.whatsapp)} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>
-            Contacter sur WhatsApp
-          </a>
-          <button type="button" onClick={() => { setOpen(false); onWhatsApp(); }}>
-            <Send size={15} aria-hidden="true" /> Envoyer sur WhatsApp <span className="export-count-badge">{notExportedCount}</span>
-          </button>
-          <button type="button" disabled={!online} onClick={() => { setOpen(false); onToggle(); }}>
-            {agent.is_suspended ? 'Réactiver' : 'Suspendre'}
-          </button>
-        </div>
-      )}
-    </div>
+    <ActionMenu
+      label={`Actions pour ${toTitleCase(agent.full_name)}`}
+      items={[
+        {
+          label: 'Contacter sur WhatsApp',
+          icon: <Phone size={16} />,
+          href: whatsappUrl(agent.whatsapp),
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
+        {
+          label: 'Envoyer sur WhatsApp',
+          icon: <Send size={16} />,
+          trailing: <span className="export-count-badge">{notExportedCount}</span>,
+          onSelect: onWhatsApp,
+        },
+        {
+          label: agent.is_suspended ? 'Réactiver' : 'Suspendre',
+          icon: agent.is_suspended ? <ShieldCheck size={16} /> : <ShieldOff size={16} />,
+          disabled: !online,
+          destructive: !agent.is_suspended,
+          positive: agent.is_suspended,
+          separatorBefore: true,
+          onSelect: onToggle,
+        },
+      ]}
+    />
   );
 }
 

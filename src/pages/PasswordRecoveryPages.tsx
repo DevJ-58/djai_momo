@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/use-toast';
 import { passwordWithConfirmationSchema, translatedAuthMessage } from '../lib/auth-validation';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { Logo } from '../components/ui';
 
 const emailSchema = z.object({
   email: z.string().trim().email('Saisissez une adresse e-mail valide.'),
@@ -119,7 +120,7 @@ export function ResetPasswordPage() {
   });
 
   if (loading) {
-    return <div className="route-loading" role="status"><span className="brand-mark loading-brand-mark">dm</span><span>Chargement de votre espace…</span></div>;
+    return <div className="route-loading" role="status"><Logo variant="full" size={160} className="loading-logo" /><span>Chargement de votre espace…</span></div>;
   }
 
   if (!session || invalidLink) {

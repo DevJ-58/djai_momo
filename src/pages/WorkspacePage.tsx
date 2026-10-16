@@ -2,6 +2,7 @@ import { Inbox } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Card, EmptyState } from '../components/ui';
 import { toTitleCase } from '../lib/format';
+import { APP_NAME } from '../lib/brand';
 
 export function WorkspacePage({ title }: { title: string }) {
   const { profile } = useAuth();
@@ -12,7 +13,7 @@ export function WorkspacePage({ title }: { title: string }) {
         <div>
           <span className="eyebrow">BONJOUR {profile ? toTitleCase(profile.full_name) : ''}</span>
           <h1>{title}</h1>
-          <p>Votre espace djai_momo vous attend.</p>
+          <p>Votre espace {APP_NAME} vous attend.</p>
         </div>
       </header>
       <Card className="workspace-card">

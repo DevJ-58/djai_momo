@@ -17,6 +17,7 @@ import { formatAmount } from '../lib/format';
 import { ToastViewport } from '../components/layout/ToastViewport';
 import { Avatar, Badge, Button, Card, EmptyState, Input, Modal, Skeleton, StatCard } from '../components/ui';
 import type { StatusKind } from '../types/ui';
+import { APP_NAME } from '../lib/brand';
 
 const statuses: StatusKind[] = ['en_attente', 'paye', 'refuse', 'probleme'];
 
@@ -30,7 +31,7 @@ export function DesignSystemPage() {
         <div>
           <span className="eyebrow"><SparkleMark /> DESIGN SYSTEM</span>
           <h1>Un espace clair,<br className="mobile-break" /> pensé pour vous.</h1>
-          <p>Les fondations visuelles de djai_momo, réunies au même endroit.</p>
+          <p>Les fondations visuelles de {APP_NAME}, réunies au même endroit.</p>
         </div>
         <Button className="header-action" onClick={() => show('Votre espace est prêt à être personnalisé.', 'success')}>
           <Plus size={19} aria-hidden="true" /><span>Faire un essai</span>
@@ -140,7 +141,7 @@ export function DesignSystemPage() {
         </Card>
       </section>
 
-      <footer className="page-footer"><span>djai_momo</span><span>Une base solide pour la suite.</span></footer>
+      <footer className="page-footer"><span>{APP_NAME}</span><span>Une base solide pour la suite.</span></footer>
       <Modal open={modalOpen} title="Une fenêtre tout en douceur" onClose={() => setModalOpen(false)}>
         <p className="modal-description">Sur petit écran, cette fenêtre devient un panneau qui glisse depuis le bas. Sur grand écran, elle reste centrée.</p>
         <Button className="modal-action" onClick={() => setModalOpen(false)}>C’est compris</Button>

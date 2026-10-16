@@ -1,14 +1,15 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import '@fontsource-variable/plus-jakarta-sans';
 import './styles.css';
 import { GuestOnly, RequireAuth, RequireRole } from './components/auth/RouteGuards';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { LoadingFallback, GlobalErrorBoundary, OfflineBanner, PwaUpdatePrompt } from './components/layout/AppSupport';
 import { Card } from './components/ui';
+import { APP_NAME } from './lib/brand';
 
 const AppShell = lazy(() => import('./components/layout/AppShell').then((module) => ({ default: module.AppShell })));
 const AddRegistrationPage = lazy(() => import('./pages/AddRegistrationPage').then((module) => ({ default: module.AddRegistrationPage })));
@@ -32,6 +33,31 @@ const queryClient = new QueryClient();
 const root = (import.meta.hot?.data.root as Root | undefined)
   ?? ReactDOM.createRoot(document.getElementById('root')!);
 
+function DocumentTitle() {
+  const { pathname } = useLocation();
+  const pageName = pathname === '/connexion' ? 'Connexion'
+    : pathname === '/inscription' ? 'Inscription'
+      : pathname === '/mot-de-passe-oublie' ? 'Mot de passe oublié'
+        : pathname === '/reinitialiser-mot-de-passe' ? 'Réinitialiser le mot de passe'
+          : pathname === '/suspendu' ? 'Compte suspendu'
+            : pathname === '/hors-ligne' ? 'Hors ligne'
+              : pathname === '/espace' ? 'Mes enregistrés'
+                : pathname === '/espace/ajouter' ? 'Ajouter un enregistré'
+                  : pathname === '/admin' ? 'Tableau de bord'
+                    : pathname === '/admin/utilisateurs' ? 'Utilisateurs'
+                      : pathname.startsWith('/admin/utilisateurs/') ? 'Détail utilisateur'
+                        : pathname === '/admin/enregistres' ? 'Enregistrés'
+                          : pathname === '/design-system' ? 'Design system'
+                            : pathname === '/' ? 'Accueil'
+                              : 'Page introuvable';
+
+  useEffect(() => {
+    document.title = `${pageName} · ${APP_NAME}`;
+  }, [pageName]);
+
+  return null;
+}
+
 function HomeRedirect() {
   const { session, loading, role, profileError } = useAuth();
 
@@ -53,6 +79,7 @@ root.render(
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <DocumentTitle />
           <AuthProvider>
             <OfflineBanner />
             <PwaUpdatePrompt />

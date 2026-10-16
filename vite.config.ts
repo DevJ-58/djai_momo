@@ -1,19 +1,28 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { APP_NAME, APP_TAGLINE } from './src/lib/brand';
 
 export default defineConfig({
   plugins: [
     react(),
+    {
+      name: 'brand-html-metadata',
+      transformIndexHtml(html) {
+        return html
+          .replaceAll('__APP_NAME__', APP_NAME)
+          .replaceAll('__APP_TAGLINE__', APP_TAGLINE);
+      },
+    },
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png'],
       manifest: {
         id: '/',
-        name: 'djai_momo',
-        short_name: 'djai_momo',
+        name: APP_NAME,
+        short_name: APP_NAME,
         lang: 'fr',
-        description: 'Application de gestion djai_momo',
+        description: APP_TAGLINE,
         start_url: '/',
         scope: '/',
         theme_color: '#FFC93C',
@@ -21,10 +30,10 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
           {
-            src: '/icons/icon-512.png',
+            src: '/pwa-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -34,12 +43,12 @@ export default defineConfig({
           {
             name: 'Ajouter un enregistré',
             url: '/espace/ajouter',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
           },
           {
             name: 'Mes enregistrés',
             url: '/espace',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
           },
         ],
       },

@@ -1,13 +1,13 @@
 import { Component, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { Button } from '../ui';
+import { Button, Logo } from '../ui';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 export function LoadingFallback() {
   return (
     <main className="route-loading" role="status" aria-live="polite">
-      <span className="brand-mark loading-brand-mark">dm</span>
+      <Logo variant="full" size={160} className="loading-logo" />
       <span className="loading-skeleton" aria-hidden="true" />
       <span>Chargement de votre espace…</span>
     </main>
@@ -48,7 +48,7 @@ export class GlobalErrorBoundary extends Component<{ children: ReactNode }, Erro
       return (
         <main className="route-message-page">
           <section className="glass error-boundary-card">
-            <span className="brand-mark">dm</span>
+            <Logo variant="full" size={160} className="route-message-logo" />
             <h1>Quelque chose s'est mal passé</h1>
             <p>Vous pouvez recharger l’application ou revenir à l’accueil.</p>
             <div className="error-boundary-actions">

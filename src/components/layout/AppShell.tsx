@@ -9,25 +9,28 @@ import { toTitleCase } from '../../lib/format';
 import { passwordWithConfirmationSchema, translatedAuthMessage } from '../../lib/auth-validation';
 import { useToast } from '../../hooks/use-toast';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
-import { AgentNotifications } from '../notifications/AgentNotifications';
-import { Avatar, Button, Modal } from '../ui';
+import { NotificationBell } from '../notifications/NotificationBell';
+import { BottomNavItem } from './BottomNavItem';
+import { Avatar, Button, Logo, Modal } from '../ui';
 import { ToastViewport } from './ToastViewport';
+import { APP_NAME } from '../../lib/brand';
 
 type NavigationItem = {
   label: string;
+  mobileLabel: string;
   to: string;
   icon: typeof LayoutDashboard;
 };
 
 const adminNavigation: NavigationItem[] = [
-  { label: 'Tableau de bord', to: '/admin', icon: LayoutDashboard },
-  { label: 'Utilisateurs', to: '/admin/utilisateurs', icon: Users },
-  { label: 'Enregistrés', to: '/admin/enregistres', icon: ClipboardList },
+  { label: 'Tableau de bord', mobileLabel: 'Tableau', to: '/admin', icon: LayoutDashboard },
+  { label: 'Utilisateurs', mobileLabel: 'Utilisateurs', to: '/admin/utilisateurs', icon: Users },
+  { label: 'Enregistrés', mobileLabel: 'Enregistrés', to: '/admin/enregistres', icon: ClipboardList },
 ];
 
 const agentNavigation: NavigationItem[] = [
-  { label: 'Mes enregistrés', to: '/espace', icon: ClipboardList },
-  { label: 'Ajouter', to: '/espace/ajouter', icon: Plus },
+  { label: 'Mes enregistrés', mobileLabel: 'Enregistrés', to: '/espace', icon: ClipboardList },
+  { label: 'Ajouter', mobileLabel: 'Ajouter', to: '/espace/ajouter', icon: Plus },
 ];
 
 type PasswordValues = z.infer<typeof passwordWithConfirmationSchema>;
@@ -46,7 +49,7 @@ export function AppShell() {
     : role === 'agent'
       ? agentNavigation
       : import.meta.env.DEV
-        ? [{ label: 'Design system', to: '/design-system', icon: Sparkles }]
+      ? [{ label: 'Design system', mobileLabel: 'Design', to: '/design-system', icon: Sparkles }]
         : [];
   const roleLabel = role === 'admin' ? 'Administrateur' : 'Agent';
   const passwordForm = useForm<PasswordValues>({
@@ -88,9 +91,8 @@ export function AppShell() {
         <span className="ambient-halo halo-lemon" />
       </div>
       <aside className="sidebar glass" aria-label="Navigation principale">
-        <Link className="brand" to={role === 'admin' ? '/admin' : role === 'agent' ? '/espace' : '/design-system'} aria-label="djai_momo — accueil">
-          <span className="brand-mark">dm</span>
-          <span>djai_momo</span>
+        <Link className="brand" to={role === 'admin' ? '/admin' : role === 'agent' ? '/espace' : '/design-system'} aria-label={`${APP_NAME} — accueil`}>
+          <Logo variant="full" size={168} />
         </Link>
         <p className="nav-caption">ESPACE</p>
         <nav className="nav-list">
@@ -105,7 +107,7 @@ export function AppShell() {
               <span>{label}</span>
             </NavLink>
           ))}
-          {role === 'agent' && <AgentNotifications placement="sidebar" />}
+          {(role === 'agent' || role === 'admin') && <NotificationBell placement="sidebar" />}
         </nav>
         <div className="sidebar-profile">
           {profile ? (
@@ -126,32 +128,38 @@ export function AppShell() {
           )}
         </div>
       </aside>
-      <main className="main-content"><Outlet /></main>
+      <main className="main-content">
+        <header className="mobile-brand-header">
+          <Link to={role === 'admin' ? '/admin' : role === 'agent' ? '/espace' : '/design-system'} aria-label={`${APP_NAME} — accueil`}>
+            <Logo variant="icon" size={40} />
+          </Link>
+        </header>
+        <Outlet />
+      </main>
       <nav className="mobile-nav glass" aria-label="Navigation principale">
-        {navigation.map(({ label, to, icon: Icon }) => (
-          <NavLink
-            className={({ isActive }) => `mobile-nav-link ${isActive ? 'mobile-nav-active' : ''}`}
-            to={to}
+        {navigation.map(({ label, mobileLabel, to, icon: Icon }) => (
+          <BottomNavItem
             key={to}
-            end={to === '/admin'}
+            icon={<Icon size={24} aria-hidden="true" />}
+            label={mobileLabel}
+            accessibleLabel={label}
             title={label}
-          >
-            <Icon size={21} aria-hidden="true" />
-            <span>{label}</span>
-          </NavLink>
+            to={to}
+            end={to === '/admin'}
+          />
         ))}
-        {role === 'agent' && <AgentNotifications placement="mobile" />}
+        {(role === 'agent' || role === 'admin') && <NotificationBell placement="mobile" />}
         {profile && (
-          <button
-            className={`mobile-nav-link mobile-profile-trigger ${profileOpen ? 'mobile-nav-active' : ''}`}
-            type="button"
+          <BottomNavItem
+            icon={<CircleUserRound size={24} aria-hidden="true" />}
+            label="Profil"
+            accessibleLabel="Profil"
+            title="Profil"
+            active={profileOpen}
             onClick={() => setProfileOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={profileOpen}
-          >
-            <CircleUserRound size={21} aria-hidden="true" />
-            <span>Profil</span>
-          </button>
+            ariaHasPopup="dialog"
+            ariaExpanded={profileOpen}
+          />
         )}
       </nav>
       {profile && (

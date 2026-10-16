@@ -1,4 +1,4 @@
-# djai_momo
+# djaimomo
 
 Application web progressive (PWA) de simulation et de suivi d’enregistrements, conçue pour un usage principalement mobile. Les données manipulées sont fictives et destinées à une étude ; ne saisissez jamais de données réelles de clients.
 
@@ -49,6 +49,7 @@ L’application de développement est généralement disponible sur `http://loca
 | `npm run build` | Exécute la vérification TypeScript puis génère le build de production dans `dist/`. |
 | `npm run preview` | Sert localement le build de production. |
 | `npm test` | Exécute les tests Vitest. |
+| `npm run icons` | Génère les icônes PWA et les favicons depuis le logo de marque. |
 
 ## Structure principale
 

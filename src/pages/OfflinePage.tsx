@@ -1,10 +1,12 @@
 import { WifiOff } from 'lucide-react';
 import { Button, Card } from '../components/ui';
+import { Logo } from '../components/ui';
 
 export function OfflinePage() {
   return (
     <main className="offline-page">
       <Card className="offline-card">
+        <Logo variant="full" size={160} className="route-message-logo" />
         <span className="offline-icon"><WifiOff size={28} aria-hidden="true" /></span>
         <span className="section-kicker">MODE HORS LIGNE</span>
         <h1>Vous êtes temporairement hors ligne.</h1>

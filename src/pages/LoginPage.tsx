@@ -8,6 +8,8 @@ import { useAuth } from '../hooks/useAuth';
 import { Button, Card, Input } from '../components/ui';
 import { translatedAuthMessage } from '../lib/auth-validation';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { Logo } from '../components/ui';
+import { APP_NAME } from '../lib/brand';
 
 const loginSchema = z.object({
   email: z.string().trim().email('Saisissez une adresse e-mail valide.'),
@@ -72,7 +74,7 @@ export function LoginPage() {
   };
 
   return (
-    <AuthPageFrame eyebrow="RAVI DE VOUS REVOIR" title="Heureux de vous retrouver." description="Connectez-vous pour accéder à votre espace djai_momo.">
+    <AuthPageFrame eyebrow="RAVI DE VOUS REVOIR" title="Heureux de vous retrouver." description={`Connectez-vous pour accéder à votre espace ${APP_NAME}.`}>
       <form className="auth-form" onSubmit={onSubmit} noValidate>
         <Input
           label="Adresse e-mail"
@@ -143,9 +145,8 @@ export function AuthPageFrame({
         <span className="ambient-halo halo-lemon" />
       </div>
       <Card className="auth-card">
-        <Link className="brand auth-brand" to="/" aria-label="djai_momo — accueil">
-          <span className="brand-mark">dm</span>
-          <span>djai_momo</span>
+        <Link className="auth-brand" to="/" aria-label={`${APP_NAME} — accueil`}>
+          <Logo variant="full" className="auth-logo" />
         </Link>
         <span className="section-kicker auth-eyebrow">{eyebrow}</span>
         <h1>{title}</h1>
