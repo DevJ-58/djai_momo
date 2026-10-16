@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 export type UserRole = 'admin' | 'agent';
@@ -117,6 +118,7 @@ async function fetchProfile(userId: string): Promise<AuthProfile | null> {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [sessionResolved, setSessionResolved] = useState(false);
@@ -124,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const sessionUserId = useRef<string | null>(null);
+  const removedAccountRedirected = useRef(false);
+  const checkingUnauthorized = useRef(false);
   const user = session?.user ?? null;
   const userId = user?.id ?? null;
 
@@ -135,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextUserId = nextSession?.user.id ?? null;
       if (sessionUserId.current !== nextUserId) {
         sessionUserId.current = nextUserId;
+        if (nextUserId) removedAccountRedirected.current = false;
         setProfile(null);
         setProfileError(null);
         setProfileLoading(Boolean(nextSession));
@@ -170,6 +175,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const redirectRemovedAccount = useCallback(async () => {
+    if (removedAccountRedirected.current) return;
+    removedAccountRedirected.current = true;
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) setProfileError(frenchAuthError(error));
+    sessionUserId.current = null;
+    setProfile(null);
+    setProfileLoading(false);
+    setSession(null);
+    setSessionResolved(true);
+    navigate('/connexion?compte=supprime', { replace: true });
+  }, [navigate]);
+
   const refreshProfile = useCallback(async () => {
     if (!userId) {
       setProfile(null);
@@ -180,9 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const nextProfile = await fetchProfile(userId);
       if (!nextProfile) {
-        setProfile(null);
-        setProfileError('Votre profil est introuvable. Réessayez ou contactez l’administrateur.');
-        setProfileLoading(false);
+        await redirectRemovedAccount();
         return;
       }
       setProfile(nextProfile);
@@ -192,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileError('Impossible de charger votre profil. Vérifiez votre connexion puis réessayez.');
       setProfileLoading(false);
     }
-  }, [userId]);
+  }, [redirectRemovedAccount, userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -211,8 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextProfile = await fetchProfile(userId);
         if (!active) return;
         if (!nextProfile) {
-          setProfileError('Votre profil est introuvable. Réessayez ou contactez l’administrateur.');
-          setProfile(null);
+          await redirectRemovedAccount();
         } else {
           setProfile(nextProfile);
           setProfileError(null);
@@ -238,14 +253,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     const onFocus = () => { void refreshProfile(); };
+    const onUnauthorized = () => {
+      if (checkingUnauthorized.current) return;
+      checkingUnauthorized.current = true;
+      void refreshProfile().finally(() => {
+        checkingUnauthorized.current = false;
+      });
+    };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('supabase-unauthorized', onUnauthorized);
 
     return () => {
       active = false;
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('supabase-unauthorized', onUnauthorized);
       void supabase.removeChannel(channel);
     };
-  }, [userId, refreshProfile]);
+  }, [userId, refreshProfile, redirectRemovedAccount]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {

@@ -23,6 +23,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const online = useOnlineStatus();
+  const [deletedAccountNotice, setDeletedAccountNotice] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
   const [resending, setResending] = useState(false);
@@ -38,6 +39,18 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   });
   const email = watch('email');
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('compte') !== 'supprime') return;
+    setDeletedAccountNotice(true);
+    searchParams.delete('compte');
+    const search = searchParams.toString();
+    navigate(
+      { pathname: location.pathname, search: search ? `?${search}` : '', hash: location.hash },
+      { replace: true, state: location.state },
+    );
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -76,6 +89,11 @@ export function LoginPage() {
   return (
     <AuthPageFrame eyebrow="RAVI DE VOUS REVOIR" title="Heureux de vous retrouver." description={`Connectez-vous pour accéder à votre espace ${APP_NAME}.`}>
       <form className="auth-form" onSubmit={onSubmit} noValidate>
+        {deletedAccountNotice && (
+          <p className="auth-info-banner" role="status">
+            Ce compte n’existe plus. Contactez l’administrateur ou créez un nouveau compte.
+          </p>
+        )}
         <Input
           label="Adresse e-mail"
           type="email"

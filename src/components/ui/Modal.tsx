@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 
@@ -9,6 +9,11 @@ type ModalProps = {
   children: ReactNode;
   className?: string;
   backdropClassName?: string;
+  descriptionId?: string;
+  initialFocusRef?: RefObject<HTMLElement | null>;
+  role?: 'dialog' | 'alertdialog';
+  canClose?: boolean;
+  icon?: ReactNode;
 };
 
 export function Modal({
@@ -18,7 +23,13 @@ export function Modal({
   children,
   className = '',
   backdropClassName = '',
+  descriptionId,
+  initialFocusRef,
+  role = 'dialog',
+  canClose = true,
+  icon,
 }: ModalProps) {
+  const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -29,10 +40,13 @@ export function Modal({
     const previousFocus = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    panelRef.current?.focus();
+    (initialFocusRef?.current ?? panelRef.current)?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
+      if (event.key === 'Escape') {
+        if (canClose) onCloseRef.current();
+        else event.preventDefault();
+      }
       if (event.key !== 'Tab' || !panelRef.current) return;
 
       const focusable = panelRef.current.querySelectorAll<HTMLElement>(
@@ -64,25 +78,29 @@ export function Modal({
       window.removeEventListener('keydown', onKeyDown);
       previousFocus?.focus();
     };
-  }, [open]);
+  }, [canClose, initialFocusRef, open]);
 
   if (!open) return null;
 
   return (
     <div className={`modal-backdrop ${backdropClassName}`} onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
+      if (canClose && event.target === event.currentTarget) onClose();
     }}>
       <section
         ref={panelRef}
         tabIndex={-1}
         className={`glass modal-panel ${className}`}
-        role="dialog"
+        role={role}
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
       >
         <div className="modal-heading">
-          <h2 id="modal-title">{title}</h2>
-          <Button variant="ghost" className="icon-button" aria-label="Fermer" onClick={onClose}>
+          <div className="modal-title-group">
+            {icon}
+            <h2 id={titleId}>{title}</h2>
+          </div>
+          <Button variant="ghost" className="icon-button" aria-label="Fermer" onClick={onClose} disabled={!canClose}>
             <X size={20} aria-hidden="true" />
           </Button>
         </div>

@@ -126,6 +126,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button-ghost { color: var(--muted); background: transparent; }
 .button-ghost:hover:not(:disabled) { color: var(--primary-text); background: var(--soft-primary-hover); }
 .button-danger { color: var(--white); background: var(--error-ink); box-shadow: var(--shadow-danger); }
+.button-danger.delete-user-confirm-button { color: #FFFFFF; background: #F43F5E; box-shadow: 0 8px 18px rgba(244, 63, 94, .2); }
+.button-danger.delete-user-confirm-button:hover:not(:disabled) { background: #E11D48; }
 .icon-button { width: 44px; min-width: 44px; padding: 0; }
 
 .showcase-section { margin-top: 40px; }
@@ -208,6 +210,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding: 16px 12px max(12px, env(safe-area-inset-bottom)); background: var(--backdrop); }
 .modal-panel { width: min(100%, 520px); padding: 24px; border-radius: 24px 24px 20px 20px; box-shadow: var(--shadow-raised); animation: sheet-in .22s ease-out; }
 .modal-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-title-group { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .modal-heading h2 { margin: 0; font-size: 19px; letter-spacing: -.01em; }
 .modal-content { padding-top: 12px; }
 .modal-description { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
@@ -550,6 +553,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .admin-confirm-modal { width: min(100%, 500px); }
 .admin-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .admin-confirm-actions .button { min-height: 44px; }
+.admin-delete-user-modal { width: min(100%, 540px); max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom))); overflow-y: auto; scroll-padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.delete-modal-icon { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border-radius: 14px; color: #F43F5E; background: rgba(244, 63, 94, .1); }
+.delete-user-content { display: grid; gap: 16px; }
+.delete-user-warning { margin: 0; border: 1px solid rgba(255, 201, 60, .65); border-radius: 14px; padding: 12px 14px; color: var(--ink); background: rgba(255, 201, 60, .18); font-size: 14px; font-weight: 700; line-height: 1.5; }
+.delete-user-error { margin: 0; color: var(--error-ink); font-size: 14px; line-height: 1.5; }
+.delete-user-error[role="alert"] { font-weight: 700; }
+.delete-user-secondary-actions, .delete-user-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.delete-user-secondary-actions { border-top: 1px solid var(--divider); padding-top: 14px; }
+.delete-user-secondary-actions .button, .delete-user-actions .button { min-height: 48px; }
+.delete-user-actions { justify-content: flex-end; border-top: 1px solid var(--divider); padding-top: 14px; }
+.admin-sensitive-zone { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 28px; border: 1px solid rgba(244, 63, 94, .2); border-radius: 22px; padding: 20px; background: rgba(255, 241, 242, .58); }
+.admin-sensitive-zone .section-kicker { color: #BE123C; }
+.admin-sensitive-zone h2 { margin: 6px 0 0; font-size: 16px; }
+.admin-sensitive-zone .button-danger { color: #FFFFFF; background: #F43F5E; }
+.auth-info-banner { margin: 0; border: 1px solid rgba(255, 201, 60, .6); border-radius: 14px; padding: 12px 14px; color: var(--ink); background: rgba(255, 201, 60, .16); font-size: 14px; font-weight: 600; line-height: 1.5; }
 
 .admin-back-link { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; margin: -10px 0 20px; color: var(--primary-text); font-size: 14px; font-weight: 800; }
 .admin-agent-detail-header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 24px; }
@@ -797,6 +815,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (min-width: 640px) {
   .pwa-update-toast { left: auto; width: min(440px, calc(100vw - 32px)); right: 16px; }
   .pwa-install-toast { left: auto; width: min(440px, calc(100vw - 32px)); right: 16px; }
+  .delete-user-actions { justify-content: flex-end; }
+  .delete-user-confirm-button { width: auto; }
+}
+@media (max-width: 639px) {
+  .delete-user-secondary-actions, .delete-user-actions { flex-direction: column; }
+  .delete-user-secondary-actions .button, .delete-user-actions .button { width: 100%; }
+  .admin-sensitive-zone > .button { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .loading-logo, .loading-skeleton, .action-menu-popover { animation: none; }

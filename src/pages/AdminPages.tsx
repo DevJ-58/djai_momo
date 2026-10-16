@@ -13,10 +13,12 @@ import {
   ShieldCheck,
   ShieldOff,
   Send,
+  Trash2,
   UsersRound,
   Wallet,
 } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { DeleteUserModal } from '../components/admin/DeleteUserModal';
 import { ToastViewport } from '../components/layout/ToastViewport';
 import { RegistrationRecordList } from '../components/registrations/RegistrationRecordList';
 import { ExportPdfModal } from '../components/exports/ExportPdfModal';
@@ -399,13 +401,29 @@ export function AdminUsersPage() {
   const mutation = useToggleSuspension();
   const { toasts, show, dismiss } = useToast();
   const online = useOnlineStatus();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filter, setFilter] = useState<AgentFilter>('all');
   const [sort, setSort] = useState<AgentSort>('recent');
   const [selected, setSelected] = useState<AgentOverview | null>(null);
+  const [deleteAgent, setDeleteAgent] = useState<AgentOverview | null>(null);
   const [whatsappAgent, setWhatsappAgent] = useState<AgentOverview | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+
+  useEffect(() => {
+    const state = location.state;
+    if (
+      typeof state === 'object' &&
+      state !== null &&
+      'deletionToast' in state &&
+      typeof state.deletionToast === 'string'
+    ) {
+      show(state.deletionToast, 'success');
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.key, location.pathname, location.state, navigate, show]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -540,6 +558,7 @@ export function AdminUsersPage() {
                 agent={agent}
                 key={agent.agent_id}
                 onToggle={() => setSelected(agent)}
+                onDelete={() => setDeleteAgent(agent)}
                 notExportedCount={exportCounts.data?.[agent.agent_id] ?? 0}
                 onWhatsApp={() => setWhatsappAgent(agent)}
                 online={online}
@@ -565,6 +584,7 @@ export function AdminUsersPage() {
                       <AgentActionMenu
                         agent={agent}
                         onToggle={() => setSelected(agent)}
+                        onDelete={() => setDeleteAgent(agent)}
                         onWhatsApp={() => setWhatsappAgent(agent)}
                         notExportedCount={exportCounts.data?.[agent.agent_id] ?? 0}
                         online={online}
@@ -585,6 +605,15 @@ export function AdminUsersPage() {
         onCancel={() => setSelected(null)}
         onConfirm={() => void confirmSuspension()}
       />
+      <DeleteUserModal
+        agent={deleteAgent}
+        onClose={() => setDeleteAgent(null)}
+        onDeleted={(result) => {
+          setDeleteAgent(null);
+          show(`${toTitleCase(result.full_name)} a été supprimé (${result.registrations} enregistrés)`, 'success');
+        }}
+        onSuspend={(agent) => setSelected(agent)}
+      />
       <WhatsAppExportModal
         open={Boolean(whatsappAgent)}
         agent={whatsappAgent}
@@ -598,12 +627,14 @@ export function AdminUsersPage() {
 function AgentCard({
   agent,
   onToggle,
+  onDelete,
   onWhatsApp,
   notExportedCount,
   online,
 }: {
   agent: AgentOverview;
   onToggle: () => void;
+  onDelete: () => void;
   onWhatsApp: () => void;
   notExportedCount: number;
   online: boolean;
@@ -629,7 +660,7 @@ function AgentCard({
       </div>
       <div className="admin-agent-card-actions">
         <Link className="button button-secondary" to={`/admin/utilisateurs/${agent.agent_id}`}>Voir la fiche</Link>
-        <AgentActionMenu agent={agent} onToggle={onToggle} onWhatsApp={onWhatsApp} notExportedCount={notExportedCount} online={online} />
+        <AgentActionMenu agent={agent} onToggle={onToggle} onDelete={onDelete} onWhatsApp={onWhatsApp} notExportedCount={notExportedCount} online={online} />
       </div>
     </Card>
   );
@@ -638,12 +669,14 @@ function AgentCard({
 function AgentActionMenu({
   agent,
   onToggle,
+  onDelete,
   onWhatsApp,
   notExportedCount,
   online,
 }: {
   agent: AgentOverview;
   onToggle: () => void;
+  onDelete: () => void;
   onWhatsApp: () => void;
   notExportedCount: number;
   online: boolean;
@@ -673,6 +706,13 @@ function AgentActionMenu({
           positive: agent.is_suspended,
           separatorBefore: true,
           onSelect: onToggle,
+        },
+        {
+          label: 'Supprimer',
+          icon: <Trash2 size={16} />,
+          destructive: true,
+          separatorBefore: true,
+          onSelect: onDelete,
         },
       ]}
     />
@@ -742,11 +782,13 @@ export function AdminAgentDetailPage() {
   const whatsappMutation = useUpdateAgentWhatsapp();
   const { toasts, show, dismiss } = useToast();
   const online = useOnlineStatus();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState<RegistrationStatus | null>(null);
   const [selectedRegistration, setSelectedRegistration] = useState<RegistrationWithAgent | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<AgentOverview | null>(null);
+  const [deleteAgent, setDeleteAgent] = useState<AgentOverview | null>(null);
   const [exportPdfOpen, setExportPdfOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [editWhatsappOpen, setEditWhatsappOpen] = useState(false);
@@ -936,12 +978,36 @@ export function AdminAgentDetailPage() {
           </div>
         )}
       </section>
+      <section className="admin-sensitive-zone" aria-labelledby="admin-sensitive-zone-title">
+        <div>
+          <span className="section-kicker">ZONE SENSIBLE</span>
+          <h2 id="admin-sensitive-zone-title">Supprimer cet utilisateur et toutes ses données</h2>
+        </div>
+        <Button variant="danger" onClick={() => setDeleteAgent(accountOverview)} disabled={!online}>
+          <Trash2 size={17} aria-hidden="true" /> Supprimer l'utilisateur
+        </Button>
+      </section>
       <SuspensionConfirmation
         agent={confirmTarget}
         pending={mutation.isPending}
         online={online}
         onCancel={() => setConfirmTarget(null)}
         onConfirm={() => void toggleSuspension()}
+      />
+      <DeleteUserModal
+        agent={deleteAgent}
+        onClose={() => setDeleteAgent(null)}
+        onDeleted={(result) => {
+          setDeleteAgent(null);
+          navigate('/admin/utilisateurs', {
+            replace: true,
+            state: { deletionToast: `${toTitleCase(result.full_name)} a été supprimé (${result.registrations} enregistrés)` },
+          });
+        }}
+        onSuspend={(target) => {
+          setDeleteAgent(null);
+          setConfirmTarget(target);
+        }}
       />
       <ExportPdfModal
         open={exportPdfOpen}

@@ -6,6 +6,9 @@ import {
 } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { adminErrorMessage } from '../lib/admin-errors';
+import { adminDeletionErrorMessage } from '../lib/admin-deletion-errors';
+import { registrationListKey, registrationStatsKey } from './useRegistrations';
+import { notificationsKey, unreadNotificationsCountKey } from './useNotifications';
 import type {
   AdminStats,
   AdminRegistrationFilters,
@@ -29,6 +32,89 @@ export const agentProfileKey = (agentId: string) => ['admin', 'agent-profile', a
 export const agentRegistrationsKey = (agentId: string, filters: RegistrationFilters) => (
   ['admin', 'agent-registrations', agentId, filters] as const
 );
+export const deletionImpactKey = (agentId: string) => ['admin', 'deletion-impact', agentId] as const;
+
+export type UserDeletionResult = {
+  full_name: string;
+  registrations: number;
+};
+
+function isUserDeletionResult(value: unknown): value is UserDeletionResult & { deleted: true } {
+  if (typeof value !== 'object' || value === null) return false;
+  return 'deleted' in value &&
+    value.deleted === true &&
+    'full_name' in value &&
+    typeof value.full_name === 'string' &&
+    'registrations' in value &&
+    typeof value.registrations === 'number';
+}
+
+export function useDeletionImpact(agentId: string, enabled = true) {
+  return useQuery({
+    queryKey: deletionImpactKey(agentId),
+    enabled: Boolean(agentId) && enabled,
+    queryFn: async () => {
+      const [allResult, notExportedResult] = await Promise.all([
+        supabase
+          .from('registrations')
+          .select('id', { count: 'exact', head: true })
+          .eq('agent_id', agentId),
+        supabase
+          .from('registrations')
+          .select('id', { count: 'exact', head: true })
+          .eq('agent_id', agentId)
+          .is('exported_at', null),
+      ]);
+      if (allResult.error) throw new Error(adminErrorMessage(allResult.error));
+      if (notExportedResult.error) throw new Error(adminErrorMessage(notExportedResult.error));
+      return {
+        registrations: allResult.count ?? 0,
+        notExported: notExportedResult.count ?? 0,
+      };
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (agentId: string): Promise<UserDeletionResult> => {
+      if (!navigator.onLine) {
+        throw new Error('Pas de connexion. Réessayez une fois en ligne.');
+      }
+      try {
+        const { data, error } = await supabase.rpc('admin_delete_user', { p_user_id: agentId });
+        if (error) throw error;
+        if (!isUserDeletionResult(data)) {
+          throw new Error('Impossible de supprimer cet utilisateur. Veuillez réessayer.');
+        }
+        return { full_name: data.full_name, registrations: data.registrations };
+      } catch (error) {
+        throw new Error(adminDeletionErrorMessage(error));
+      }
+    },
+    onSuccess: async (_result, agentId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: agentsOverviewKey }),
+        queryClient.invalidateQueries({ queryKey: adminStatsKey }),
+        queryClient.invalidateQueries({ queryKey: adminRegistrationsKey }),
+        queryClient.invalidateQueries({ queryKey: registrationListKey }),
+        queryClient.invalidateQueries({ queryKey: registrationStatsKey }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'agent-registrations', agentId] }),
+        queryClient.invalidateQueries({ queryKey: agentExportCountsKey }),
+        queryClient.invalidateQueries({ queryKey: dailyRegistrationsKey }),
+        queryClient.invalidateQueries({ queryKey: ['admin', 'day-overview'] }),
+        queryClient.invalidateQueries({ queryKey: recentRegistrationsKey }),
+        queryClient.invalidateQueries({ queryKey: notificationsKey(agentId) }),
+        queryClient.invalidateQueries({ queryKey: unreadNotificationsCountKey(agentId) }),
+        queryClient.invalidateQueries({ queryKey: ['registration-history'] }),
+        queryClient.invalidateQueries({ queryKey: deletionImpactKey(agentId) }),
+        queryClient.invalidateQueries({ queryKey: agentProfileKey(agentId) }),
+      ]);
+    },
+  });
+}
 
 function isAgentOverview(value: unknown): value is AgentOverview {
   if (typeof value !== 'object' || value === null) return false;
