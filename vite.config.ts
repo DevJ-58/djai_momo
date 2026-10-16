@@ -69,6 +69,10 @@ export default defineConfig({
   build: {
     sourcemap: false,
     rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'INVALID_ANNOTATION' && warning.id?.includes('/node_modules/zod/')) return;
+        warn(warning);
+      },
       output: {
         manualChunks(id) {
           if (id.includes('/src/pages/AdminPages.tsx')) return 'admin-pages';

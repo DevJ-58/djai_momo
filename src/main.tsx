@@ -7,7 +7,7 @@ import '@fontsource-variable/plus-jakarta-sans';
 import './styles.css';
 import { GuestOnly, RequireAuth, RequireRole } from './components/auth/RouteGuards';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import { LoadingFallback, GlobalErrorBoundary, OfflineBanner, PwaUpdatePrompt } from './components/layout/AppSupport';
+import { LoadingFallback, GlobalErrorBoundary, OfflineBanner, PwaInstallPrompt, PwaUpdatePrompt } from './components/layout/AppSupport';
 import { Card } from './components/ui';
 import { APP_NAME } from './lib/brand';
 
@@ -82,6 +82,7 @@ root.render(
           <DocumentTitle />
           <AuthProvider>
             <OfflineBanner />
+            <PwaInstallPrompt />
             <PwaUpdatePrompt />
             <Suspense fallback={<LoadingFallback />}>
               <Routes>

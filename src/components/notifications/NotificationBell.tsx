@@ -12,6 +12,7 @@ import { Button, Skeleton } from '../ui';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useAuth } from '../../hooks/useAuth';
 import { BottomNavItem } from '../layout/BottomNavItem';
+import { formatUnreadNotificationCount } from './notification-count';
 
 type AgentNotificationsProps = {
   placement: 'sidebar' | 'mobile';
@@ -114,16 +115,17 @@ export function NotificationBell({ placement }: AgentNotificationsProps) {
   const ariaLabel = count === 0
     ? 'Notifications'
     : `Notifications, ${count} non lue${count === 1 ? '' : 's'}`;
+  const badgeLabel = formatUnreadNotificationCount(count);
   const icon = (
     <span className="agent-notifications-icon">
       <Bell size={24} aria-hidden="true" />
-      {count > 0 && (
+      {badgeLabel && (
         <span
           key={badgeAnimationVersion}
           className="agent-notifications-badge"
           aria-hidden="true"
         >
-          {count > 99 ? '99+' : count}
+          {badgeLabel}
         </span>
       )}
     </span>

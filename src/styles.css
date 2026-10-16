@@ -763,6 +763,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .offline-banner { position: fixed; z-index: 28; top: max(10px, env(safe-area-inset-top)); left: 50%; width: max-content; max-width: calc(100vw - 24px); min-height: 38px; transform: translateX(-50%); padding: 9px 14px; border-radius: 999px; color: var(--ink); text-align: center; font-size: 13px; font-weight: 700; }
 .pwa-update-toast { position: fixed; z-index: 31; top: max(12px, env(safe-area-inset-top)); right: 12px; left: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: 64px; padding: 10px 12px; border-radius: 17px; font-size: 14px; font-weight: 700; }
 .pwa-update-toast .button { min-height: 44px; }
+.pwa-install-toast { position: fixed; z-index: 30; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 64px; padding: 10px 12px; border-radius: 17px; font-size: 14px; font-weight: 700; }
+.pwa-install-toast > span { flex: 1 1 180px; }
+.pwa-install-toast .button { min-height: 44px; }
 .error-boundary-card { width: min(100%, 460px); padding: 28px; border-radius: 24px; text-align: center; }
 .error-boundary-card h1 { margin: 18px 0 8px; font-size: 24px; }
 .brand-logo { --logo-size: 160px; display: block; flex: 0 0 auto; width: var(--logo-size); }
@@ -793,6 +796,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 @media (min-width: 640px) {
   .pwa-update-toast { left: auto; width: min(440px, calc(100vw - 32px)); right: 16px; }
+  .pwa-install-toast { left: auto; width: min(440px, calc(100vw - 32px)); right: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .loading-logo, .loading-skeleton, .action-menu-popover { animation: none; }
