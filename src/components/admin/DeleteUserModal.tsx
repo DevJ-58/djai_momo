@@ -19,6 +19,7 @@ export function DeleteUserModal({ agent, onClose, onDeleted, onSuspend }: Delete
   const mutation = useDeleteUser();
   const impact = useDeletionImpact(agent?.agent_id ?? '', Boolean(agent));
   const confirmationRef = useRef<HTMLInputElement>(null);
+  const submissionInProgress = useRef(false);
   const descriptionId = useId();
   const [confirmation, setConfirmation] = useState('');
   const [exportPdfOpen, setExportPdfOpen] = useState(false);
@@ -36,15 +37,18 @@ export function DeleteUserModal({ agent, onClose, onDeleted, onSuspend }: Delete
 
   useEffect(() => {
     if (agent && impact.data && !exportPdfOpen) confirmationRef.current?.focus();
-  }, [agent, exportPdfOpen, impact.data]);
+  }, [agent?.agent_id, exportPdfOpen, impact.data]);
 
   const deleteUser = async () => {
-    if (!agent || !online || !confirmed || !impact.data || pending) return;
+    if (!agent || !online || !confirmed || !impact.data || pending || submissionInProgress.current) return;
+    submissionInProgress.current = true;
     try {
       const result = await mutation.mutateAsync(agent.agent_id);
       onDeleted(result);
     } catch {
       // The mutation exposes a translated message in its error state.
+    } finally {
+      submissionInProgress.current = false;
     }
   };
 

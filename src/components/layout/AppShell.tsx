@@ -92,7 +92,7 @@ export function AppShell() {
       </div>
       <aside className="sidebar glass" aria-label="Navigation principale">
         <Link className="brand" to={role === 'admin' ? '/admin' : role === 'agent' ? '/espace' : '/design-system'} aria-label={`${APP_NAME} — accueil`}>
-          <Logo variant="full" size={168} />
+          <Logo variant="full" size={132} />
         </Link>
         <p className="nav-caption">ESPACE</p>
         <nav className="nav-list">

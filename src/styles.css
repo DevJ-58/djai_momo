@@ -154,6 +154,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .field-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 700; }
 .input-showcase { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .field { min-width: 0; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
 .input-wrap { position: relative; }
 .input { display: block; width: 100%; height: 48px; border: 1px solid var(--input-border); border-radius: 16px; padding: 0 14px; color: var(--ink); background: var(--white-input); font-size: 14px; }
 .input::placeholder { color: var(--muted); opacity: 1; }
@@ -242,14 +243,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 @media (min-width: 768px) {
   .app-shell { display: grid; grid-template-columns: 238px minmax(0, 1fr); }
-  .sidebar { position: sticky; top: 16px; display: flex; flex-direction: column; height: calc(100vh - 32px); margin: 16px 0 16px 16px; padding: 24px 16px; border-radius: 24px; }
-  .brand { display: flex; align-items: center; justify-content: center; margin: 20px 0; }
-  .brand .brand-logo { --logo-size: 168px; }
+  .sidebar { position: sticky; top: 16px; display: flex; min-height: 0; flex-direction: column; height: calc(100vh - 32px); height: calc(100dvh - 32px); margin: 16px 0 16px 16px; overflow: hidden; padding: 24px 16px; border-radius: 24px; }
+  .brand { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; margin: 12px 0; }
+  .brand .brand-logo { max-width: 100%; }
   .nav-caption { padding: 0 8px; margin: 0 0 12px; font-size: 14px; color: var(--muted); }
-  .nav-list { display: grid; gap: 4px; }
+  .nav-list { display: grid; flex: 1 1 auto; min-height: 0; gap: 4px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
   .nav-link { min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 16px; color: var(--muted); font-size: 14px; font-weight: 700; }
   .nav-link:hover, .nav-link-active { color: var(--primary-ink); background: var(--soft-primary-active); }
-  .sidebar-profile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding: 16px 4px 4px; border-top: 1px solid var(--primary-border); }
+  .sidebar-profile { position: sticky; z-index: 1; bottom: 0; display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding: 16px 4px 4px; border-top: 1px solid var(--primary-border); background: var(--glass-fallback); }
   .sidebar-profile-copy { display: grid; flex: 1; min-width: 0; gap: 2px; }
   .sidebar-profile-copy strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
   .sidebar-profile-copy span { color: var(--muted); font-size: 14px; }
@@ -385,6 +386,73 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .simulation-notice { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid rgba(255, 201, 60, .22); border-radius: 16px; color: var(--ink); background: rgba(255, 243, 196, .75); }
 .simulation-notice > svg { flex: 0 0 auto; margin-top: 2px; color: var(--primary-icon); }
 .simulation-notice p { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.55; }
+.registration-add-tabs { display: flex; gap: 8px; margin-top: 20px; border-bottom: 1px solid var(--divider); }
+.registration-add-tab { min-width: 112px; min-height: 48px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; border-radius: 12px 12px 0 0; color: var(--muted); background: transparent; font: inherit; font-weight: 700; cursor: pointer; }
+.registration-add-tab.active { border-bottom-color: var(--primary); color: var(--ink); background: rgba(255, 243, 196, .5); }
+.registration-add-tab:focus-visible, .paste-password-toggle:focus-visible { outline: 3px solid var(--primary-text); outline-offset: 2px; }
+.paste-registration-panel { display: grid; gap: 16px; margin-top: 20px; padding-bottom: calc(180px + env(safe-area-inset-bottom)); }
+.paste-textarea-label { color: var(--ink); font-size: 15px; font-weight: 700; }
+.paste-textarea { display: block; width: 100%; min-width: 0; min-height: 160px; resize: vertical; border: 1px solid var(--divider); border-radius: 16px; padding: 14px; color: var(--ink); background: rgba(255, 255, 255, .8); font: inherit; line-height: 1.5; }
+.paste-textarea:focus-visible, .paste-field input:focus-visible { outline: 3px solid var(--primary-text); outline-offset: 2px; }
+.paste-help { display: block; min-width: 0; max-width: 100%; margin: 0; overflow: visible; color: var(--muted); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: normal; }
+.paste-input-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.paste-input-actions .button { min-height: 48px; }
+.paste-detected-count { margin-left: auto; color: var(--ink); font-size: 14px; font-weight: 700; }
+.paste-feedback { margin: 0; color: var(--primary-text); font-size: 14px; font-weight: 700; }
+.paste-auto-toggle { display: flex; min-height: 48px; align-items: center; gap: 10px; color: var(--ink); font-size: 14px; font-weight: 600; }
+.paste-auto-toggle input, .paste-confirm input { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--primary-icon); }
+.paste-countdown { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--primary-border); border-radius: 14px; background: rgba(255, 243, 196, .72); font-weight: 700; }
+.paste-preview { display: grid; gap: 12px; }
+.paste-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--ink); font-size: 14px; font-weight: 700; }
+.paste-show-all { justify-self: start; }
+.paste-entry-list { display: grid; gap: 10px; }
+.paste-entry-header { display: none; }
+.paste-entry { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--divider); border-radius: 16px; background: rgba(255, 255, 255, .72); }
+.paste-entry-status { display: flex; align-items: center; gap: 8px; }
+.paste-status-icon { display: inline-grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 50%; font-size: 16px; font-weight: 900; }
+.paste-status-icon.valid { color: #176b35; background: #e2f5e7; }
+.paste-status-icon.warning { color: #765000; background: #fff0bf; }
+.paste-status-icon.invalid { color: #8e2854; background: #ffe4ef; }
+.paste-mobile-label { color: var(--muted); font-size: 12px; font-weight: 700; }
+.paste-field { display: grid; min-width: 0; gap: 5px; }
+.paste-field input { width: 100%; min-width: 0; min-height: 48px; border: 1px solid var(--divider); border-radius: 12px; padding: 0 12px; color: var(--ink); background: white; font: inherit; }
+.paste-password-field { display: flex; min-width: 0; align-items: end; gap: 6px; }
+.paste-password-field .paste-field { flex: 1; }
+.paste-password-toggle { min-width: 70px; min-height: 48px; border: 1px solid var(--primary-border); border-radius: 12px; padding: 0 8px; color: var(--ink); background: white; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.paste-entry-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.paste-entry-actions .button { min-height: 48px; }
+.paste-confirm { display: inline-flex; min-height: 48px; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.paste-entry-issue, .paste-entry-result { width: 100%; color: #8e2854; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.paste-entry.warning .paste-entry-issue { color: #765000; }
+.paste-ignored-lines { border: 1px solid var(--divider); border-radius: 14px; padding: 12px 14px; color: var(--ink); }
+.paste-ignored-lines summary { min-height: 32px; cursor: pointer; font-weight: 700; }
+.paste-ignored-lines ul { display: grid; gap: 6px; margin: 10px 0 0; padding-left: 22px; }
+.paste-ignored-lines li { overflow-wrap: anywhere; color: var(--muted); font-size: 13px; }
+.paste-result-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 16px; }
+.paste-result-card a { color: var(--primary-text); font-weight: 700; }
+.paste-progress { display: grid; gap: 8px; color: var(--ink); font-size: 14px; font-weight: 700; }
+.paste-progress progress { width: 100%; height: 12px; accent-color: var(--primary-icon); }
+.paste-sticky-actions { position: sticky; z-index: 2; bottom: calc(84px + env(safe-area-inset-bottom)); display: grid; gap: 8px; margin: 0 -8px; border-top: 1px solid var(--divider); padding: 12px 8px; background: rgba(255, 255, 255, .96); backdrop-filter: blur(16px); }
+.paste-submit { width: 100%; }
+.paste-sticky-actions .session-add-count { text-align: center; }
+
+@media (min-width: 768px) {
+  .paste-entry-list { gap: 0; overflow-x: auto; border: 1px solid var(--divider); border-radius: 14px; }
+  .paste-entry-header, .paste-entry { display: grid; grid-template-columns: minmax(82px, .6fr) minmax(180px, 1.25fr) minmax(180px, 1.25fr) minmax(145px, 1fr); align-items: center; gap: 12px; }
+  .paste-entry-header { min-height: 44px; padding: 8px 12px; color: var(--muted); background: rgba(255, 243, 196, .62); font-size: 12px; font-weight: 800; }
+  .paste-entry { border: 0; border-radius: 0; border-top: 1px solid var(--divider); padding: 12px; }
+  .paste-mobile-label { display: none; }
+  .paste-password-field { align-items: center; }
+  .paste-entry-actions { align-items: center; }
+  .paste-entry-actions .button { min-height: 44px; }
+  .paste-submit { width: auto; }
+}
+
+@media (min-width: 1024px) {
+  .paste-registration-panel { padding-bottom: 0; }
+  .paste-textarea { min-height: 200px; }
+  .paste-sticky-actions { position: static; bottom: auto; margin: 0; border-radius: 0; padding: 12px 0 0; background: transparent; backdrop-filter: none; }
+}
 .add-registration-form { display: grid; gap: 18px; margin-top: 22px; }
 .add-registration-form .input { height: 48px; }
 .add-registration-form .password-toggle { top: 37px; }
