@@ -29,9 +29,9 @@ export async function fetchAllRegistrations(
   for (let page = 0; page < MAX_ROWS / PAGE_SIZE; page += 1) {
     let query = supabase
       .from('registrations')
-      .select('id, agent_id, seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
-      .order('agent_id', { ascending: true })
-      .order('seq', { ascending: true });
+      .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
+      .order('send_day', { ascending: true })
+      .order('day_seq', { ascending: true });
 
     if (filters.status) query = query.eq('status', filters.status);
     if (filters.agentId) query = query.eq('agent_id', filters.agentId);
@@ -55,8 +55,8 @@ export async function fetchAllRegistrations(
   let probe = supabase
     .from('registrations')
     .select('id, profiles!inner(full_name)')
-    .order('agent_id', { ascending: true })
-    .order('seq', { ascending: true });
+    .order('send_day', { ascending: true })
+    .order('day_seq', { ascending: true });
   if (filters.status) probe = probe.eq('status', filters.status);
   if (filters.agentId) probe = probe.eq('agent_id', filters.agentId);
   if (filters.agentName) probe = probe.ilike('profiles.full_name', `%${filters.agentName}%`);

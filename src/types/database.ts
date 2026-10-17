@@ -4,6 +4,8 @@ export type Registration = {
   id: string;
   agent_id: string;
   seq: number;
+  send_day: string;
+  day_seq: number;
   email: string;
   mdp: string;
   status: RegistrationStatus;
@@ -18,6 +20,7 @@ export type RegistrationListItem = Omit<Registration, 'agent_id'>;
 
 export type RegistrationWithAgent = Registration & {
   profiles: { full_name: string };
+  correction_requests?: Pick<CorrectionRequest, 'id' | 'status'>[] | null;
 };
 
 export type RecentRegistration = Omit<Registration, 'mdp'> & {
@@ -42,6 +45,18 @@ export type Notification = {
   registration_id: string | null;
   read_at: string | null;
   created_at: string;
+};
+
+export type CorrectionRequestStatus = 'ouverte' | 'traitee';
+
+export type CorrectionRequest = {
+  id: string;
+  registration_id: string;
+  agent_id: string;
+  message: string;
+  status: CorrectionRequestStatus;
+  created_at: string;
+  handled_at: string | null;
 };
 
 export type RegistrationStatusRpcError =
@@ -101,6 +116,7 @@ export type AdminRegistrationFilters = RegistrationFilters & {
   dateFrom?: string;
   dateTo?: string;
   exported?: 'all' | 'exported' | 'not_exported';
+  correctionsOnly?: boolean;
 };
 
 export type RegistrationExportRow = Registration & {

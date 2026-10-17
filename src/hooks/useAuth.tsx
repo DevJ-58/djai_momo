@@ -12,7 +12,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
-export type UserRole = 'admin' | 'agent';
+export type UserRole = 'admin' | 'agent' | 'receveur';
 
 export type AuthProfile = {
   id: string;
@@ -44,6 +44,8 @@ type AuthContextValue = {
   resendSignupConfirmation: (email: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  updatePasswordWithCurrentPassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateMyFullName: (fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 };
@@ -331,6 +333,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updatePasswordWithCurrentPassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    if (!user?.email) throw new Error('account-email-unavailable');
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+    if (signInError) throw signInError;
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      const details = error.message.toLocaleLowerCase('fr');
+      if (
+        !navigator.onLine
+        || error instanceof TypeError
+        || details.includes('network')
+        || details.includes('fetch')
+        || details.includes('timeout')
+        || details.includes('offline')
+      ) {
+        throw error;
+      }
+      throw new Error('new_password_rejected');
+    }
+    setPasswordRecovery(false);
+  }, [user?.email]);
+
+  const updateMyFullName = useCallback(async (fullName: string) => {
+    const { error } = await supabase.rpc('update_my_full_name', { p_name: fullName });
+    if (error) throw error;
+    setProfile((currentProfile) => currentProfile
+      ? { ...currentProfile, full_name: fullName }
+      : currentProfile);
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -354,6 +389,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resendSignupConfirmation,
     sendPasswordReset,
     updatePassword,
+    updatePasswordWithCurrentPassword,
+    updateMyFullName,
     signOut,
     refreshProfile,
   }), [
@@ -369,6 +406,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resendSignupConfirmation,
     sendPasswordReset,
     updatePassword,
+    updatePasswordWithCurrentPassword,
+    updateMyFullName,
     signOut,
     refreshProfile,
   ]);

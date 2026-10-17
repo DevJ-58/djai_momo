@@ -108,7 +108,13 @@ export function ResetPasswordPage() {
       setCompleted(true);
       show('Votre mot de passe a été modifié.', 'success');
       window.setTimeout(() => {
-        navigate(role === 'admin' ? '/admin' : role === 'agent' ? '/espace' : '/connexion', { replace: true });
+        navigate(
+          role === 'admin' ? '/admin'
+            : role === 'agent' ? '/espace'
+              : role === 'receveur' ? '/receveur'
+                : '/connexion',
+          { replace: true },
+        );
       }, 900);
     } catch (error) {
       const message = translatedAuthMessage(error);

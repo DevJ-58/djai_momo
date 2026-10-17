@@ -50,9 +50,11 @@ import {
 } from '../hooks/useAdmin';
 import { useAuth } from '../hooks/useAuth';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { useAbidjanToday } from '../hooks/useAbidjanToday';
 import { formatAmount, formatDate, formatRelative, toTitleCase } from '../lib/format';
 import type { AgentOverview, DailyPoint, RegistrationStatus, RegistrationWithAgent } from '../types/database';
 import { generateAgentsSummaryPdf } from '../lib/exports/pdf';
+import { formatDailyNumber } from '../lib/registration-days';
 
 const statusItems: Array<{ status: RegistrationStatus; label: string }> = [
   { status: 'en_attente', label: 'En attente' },
@@ -67,6 +69,7 @@ export function AdminDashboardPage() {
   const agents = useAgentsOverview();
   const daily = useDailyRegistrations(14);
   const recent = useRecentRegistrations();
+  const today = useAbidjanToday();
   const [activeDay, setActiveDay] = useState<number | null>(null);
 
   const refresh = () => {
@@ -233,7 +236,7 @@ export function AdminDashboardPage() {
                     <Link to={`/admin/utilisateurs/${registration.agent_id}`} className="admin-recent-agent">
                       {registration.profiles?.full_name ? toTitleCase(registration.profiles.full_name) : 'Utilisateur'}
                     </Link>
-                    <span className="admin-recent-number">N° {registration.seq}</span>
+                    <span className="admin-recent-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span>
                   </div>
                   <div className="admin-recent-meta">
                     <Badge status={registration.status} />

@@ -8,7 +8,8 @@ import type { ParsedEntry } from '../lib/parseCredentials';
 export type BatchRegistrationResult = {
   id: string;
   ok: boolean;
-  seq?: number;
+  daySeq?: number;
+  sendDay?: string;
   error?: string;
 };
 
@@ -61,7 +62,7 @@ export function useAddRegistrationsBatch() {
               mdp: entry.password,
               agentId: user.id,
             });
-            result = { id: entry.id, ok: true, seq: registration.seq };
+            result = { id: entry.id, ok: true, daySeq: registration.day_seq, sendDay: registration.send_day };
           } catch (error) {
             const code = getErrorCode(error);
             if (code === '42501') {

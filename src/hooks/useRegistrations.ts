@@ -15,7 +15,7 @@ export function useRegistrations({ status, search }: RegistrationFilters) {
     queryFn: async ({ pageParam }) => {
       let query = supabase
         .from('registrations')
-        .select('id, seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at')
+        .select('id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at')
         .order('created_at', { ascending: false });
 
       if (status) query = query.eq('status', status);
@@ -42,7 +42,7 @@ export function useRegistrationById(registrationId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('registrations')
-        .select('id, seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at')
+        .select('id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at')
         .eq('id', registrationId)
         .maybeSingle()
         .returns<RegistrationListItem | null>();

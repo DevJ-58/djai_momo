@@ -30,7 +30,10 @@ export function RequireRole({ role }: { role: UserRole }) {
   const { role: userRole } = useAuth();
 
   if (userRole !== role) {
-    return <Navigate to={userRole === 'admin' ? '/admin' : '/espace'} replace />;
+    if (userRole === 'admin') return <Navigate to="/admin" replace />;
+    if (userRole === 'agent') return <Navigate to="/espace" replace />;
+    if (userRole === 'receveur') return <Navigate to="/receveur" replace />;
+    return <Navigate to="/connexion" replace />;
   }
   return <Outlet />;
 }
@@ -50,5 +53,8 @@ export function GuestOnly() {
       </main>
     );
   }
-  return <Navigate to={role === 'admin' ? '/admin' : '/espace'} replace />;
+  if (role === 'admin') return <Navigate to="/admin" replace />;
+  if (role === 'agent') return <Navigate to="/espace" replace />;
+  if (role === 'receveur') return <Navigate to="/receveur" replace />;
+  return <Navigate to="/connexion" replace />;
 }

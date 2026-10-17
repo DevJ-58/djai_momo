@@ -1,7 +1,13 @@
 import { toTitleCase } from '../format';
+import {
+  formatDailyGroupHeading,
+  formatDailyNumber,
+  getAbidjanToday,
+  groupBySendDay,
+} from '../registration-days';
 import type { RegistrationExportRow } from '../../types/database';
 
-export type WhatsAppEntry = Pick<RegistrationExportRow, 'seq' | 'email' | 'mdp'> & {
+export type WhatsAppEntry = Pick<RegistrationExportRow, 'day_seq' | 'send_day' | 'email' | 'mdp'> & {
   agentName: string;
 };
 
@@ -10,27 +16,53 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   return digits.length >= 8 && digits.length <= 15 ? digits : null;
 }
 
-export function formatEntry(agentName: string, seq: number, email: string, mdp: string): string {
-  return `${toTitleCase(agentName)} (${seq})\n${email}\n${mdp}`;
+export function formatEntry(
+  agentName: string,
+  daySeq: number,
+  email: string,
+  mdp: string,
+  sendDay: string,
+  today = getAbidjanToday(),
+): string {
+  return `${toTitleCase(agentName)} (${formatDailyNumber(daySeq, sendDay, today)})\n${email}\n${mdp}`;
 }
 
-export function buildMessages(entries: WhatsAppEntry[], maxEncodedLength = 1800): string[] {
+export function buildMessages(
+  entries: WhatsAppEntry[],
+  maxEncodedLength = 1800,
+  today = getAbidjanToday(),
+): string[] {
   if (!Number.isSafeInteger(maxEncodedLength) || maxEncodedLength <= 0) {
     throw new RangeError('La longueur maximale doit être un entier positif.');
   }
 
-  const sorted = [...entries].sort((first, second) => first.seq - second.seq);
+  const groups = groupBySendDay(entries);
   const messages: string[] = [];
   let current = '';
+  let currentDay = '';
 
-  for (const entry of sorted) {
-    const formatted = formatEntry(entry.agentName, entry.seq, entry.email, entry.mdp);
-    const candidate = current ? `${current}\n\n${formatted}` : formatted;
-    if (current && encodeURIComponent(candidate).length > maxEncodedLength) {
-      messages.push(current);
-      current = formatted;
-    } else {
-      current = candidate;
+  for (const group of groups) {
+    const heading = formatDailyGroupHeading(group.sendDay, today);
+    for (const entry of group.registrations) {
+      const formatted = formatEntry(
+        entry.agentName,
+        entry.day_seq,
+        entry.email,
+        entry.mdp,
+        entry.send_day,
+        today,
+      );
+      const candidate = current
+        ? `${current}\n\n${currentDay === group.sendDay ? '' : `${heading}\n`}${formatted}`
+        : `${heading}\n${formatted}`;
+
+      if (current && encodeURIComponent(candidate).length > maxEncodedLength) {
+        messages.push(current);
+        current = `${heading}\n${formatted}`;
+      } else {
+        current = candidate;
+      }
+      currentDay = group.sendDay;
     }
   }
 

@@ -25,6 +25,8 @@ const AdminDashboardPage = lazy(() => import('./pages/AdminPages').then((module)
 const AdminAgentDetailPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminAgentDetailPage })));
 const AdminRegistrationsPlaceholderPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminRegistrationsPlaceholderPage })));
 const AdminUsersPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminUsersPage })));
+const ReceiverDashboardPage = lazy(() => import('./pages/ReceiverPages').then((module) => ({ default: module.ReceiverDashboardPage })));
+const ReceiverUserPage = lazy(() => import('./pages/ReceiverPages').then((module) => ({ default: module.ReceiverUserPage })));
 const DesignSystemPage = import.meta.env.DEV
   ? lazy(() => import('./pages/DesignSystemPage').then((module) => ({ default: module.DesignSystemPage })))
   : null;
@@ -43,13 +45,15 @@ function DocumentTitle() {
             : pathname === '/hors-ligne' ? 'Hors ligne'
               : pathname === '/espace' ? 'Mes enregistrés'
                 : pathname === '/espace/ajouter' ? 'Ajouter un enregistré'
-                  : pathname === '/admin' ? 'Tableau de bord'
-                    : pathname === '/admin/utilisateurs' ? 'Utilisateurs'
-                      : pathname.startsWith('/admin/utilisateurs/') ? 'Détail utilisateur'
-                        : pathname === '/admin/enregistres' ? 'Enregistrés'
-                          : pathname === '/design-system' ? 'Design system'
-                            : pathname === '/' ? 'Accueil'
-                              : 'Page introuvable';
+                  : pathname === '/receveur' ? 'Receveur'
+                    : pathname.startsWith('/receveur/u/') ? 'Agent receveur'
+                      : pathname === '/admin' ? 'Tableau de bord'
+                        : pathname === '/admin/utilisateurs' ? 'Utilisateurs'
+                          : pathname.startsWith('/admin/utilisateurs/') ? 'Détail utilisateur'
+                            : pathname === '/admin/enregistres' ? 'Enregistrés'
+                              : pathname === '/design-system' ? 'Design system'
+                                : pathname === '/' ? 'Accueil'
+                                  : 'Page introuvable';
 
   useEffect(() => {
     document.title = `${pageName} · ${APP_NAME}`;
@@ -63,7 +67,7 @@ function HomeRedirect() {
 
   if (loading) return <LoadingFallback />;
   if (!session) return <Navigate to="/connexion" replace />;
-  if (role) return <Navigate to={role === 'admin' ? '/admin' : '/espace'} replace />;
+  if (role) return <Navigate to={role === 'admin' ? '/admin' : role === 'agent' ? '/espace' : role === 'receveur' ? '/receveur' : '/connexion'} replace />;
   return (
     <main className="route-message-page">
       <Card className="route-message-card">
@@ -99,6 +103,10 @@ root.render(
                     <Route element={<RequireRole role="agent" />}>
                       <Route path="/espace" element={<AgentRegistrationsPage />} />
                       <Route path="/espace/ajouter" element={<AddRegistrationPage />} />
+                    </Route>
+                    <Route element={<RequireRole role="receveur" />}>
+                      <Route path="/receveur" element={<ReceiverDashboardPage />} />
+                      <Route path="/receveur/u/:agentId" element={<ReceiverUserPage />} />
                     </Route>
                     <Route element={<RequireRole role="admin" />}>
                       <Route path="/admin" element={<AdminDashboardPage />} />

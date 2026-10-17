@@ -19,6 +19,7 @@ import type {
   RecentRegistration,
 } from '../types/database';
 import type { AuthProfile } from './useAuth';
+import { useAuth } from './useAuth';
 
 const PAGE_SIZE = 20;
 
@@ -205,7 +206,7 @@ export function useRecentRegistrations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('registrations')
-        .select('id, agent_id, seq, email, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
+        .select('id, agent_id, seq, send_day, day_seq, email, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
         .order('created_at', { ascending: false })
         .limit(8)
         .returns<RecentRegistration[]>();
@@ -234,6 +235,26 @@ export function useAgentProfile(agentId: string) {
   });
 }
 
+export function useAdminRegistrationById(registrationId: string) {
+  const { role } = useAuth();
+  return useQuery({
+    queryKey: [...adminRegistrationsKey, 'detail', registrationId],
+    enabled: Boolean(registrationId && role === 'admin'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
+        .eq('id', registrationId)
+        .maybeSingle()
+        .returns<RegistrationWithAgent | null>();
+      if (error) throw new Error(adminErrorMessage(error));
+      if (!data) throw new Error('Cet enregistré n’existe plus.');
+      return data;
+    },
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useAgentRegistrations(agentId: string, { status, search }: RegistrationFilters) {
   return useInfiniteQuery({
     queryKey: agentRegistrationsKey(agentId, { status, search }),
@@ -242,7 +263,7 @@ export function useAgentRegistrations(agentId: string, { status, search }: Regis
     queryFn: async ({ pageParam }) => {
       let query = supabase
         .from('registrations')
-        .select('id, agent_id, seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
+        .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
         .eq('agent_id', agentId)
         .order('created_at', { ascending: false });
 
@@ -270,16 +291,26 @@ export function useAdminRegistrations({
   dateFrom,
   dateTo,
   exported = 'all',
-}: AdminRegistrationFilters) {
+  correctionsOnly = false,
+}: AdminRegistrationFilters, correctionRegistrationIds?: string[]) {
   return useInfiniteQuery({
-    queryKey: [...adminRegistrationsKey, { status, search, agentName, agentId, dateFrom, dateTo, exported }],
+    queryKey: [
+      ...adminRegistrationsKey,
+      { status, search, agentName, agentId, dateFrom, dateTo, exported, correctionsOnly },
+      correctionsOnly ? correctionRegistrationIds ?? null : null,
+    ],
+    enabled: !correctionsOnly || correctionRegistrationIds !== undefined,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
+      if (correctionsOnly && correctionRegistrationIds?.length === 0) return [];
       let query = supabase
         .from('registrations')
-        .select('id, agent_id, seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
+        .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
         .order('created_at', { ascending: false });
 
+      if (correctionsOnly && correctionRegistrationIds) {
+        query = query.in('id', correctionRegistrationIds);
+      }
       if (status) query = query.eq('status', status);
       if (search) query = query.ilike('email', `%${search}%`);
       if (agentName) query = query.ilike('profiles.full_name', `%${agentName}%`);

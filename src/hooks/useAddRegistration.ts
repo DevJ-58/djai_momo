@@ -31,7 +31,7 @@ export async function insertRegistration({ email, mdp, agentId }: InsertRegistra
   const { data, error } = await supabase
     .from('registrations')
     .insert({ agent_id: agentId, email, mdp })
-    .select('id, agent_id, seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at')
+    .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at')
     .single()
     .returns<Registration>();
 

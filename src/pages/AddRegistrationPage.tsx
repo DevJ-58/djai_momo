@@ -74,7 +74,7 @@ export function AddRegistrationPage() {
       reset();
       setPasswordVisible(false);
       setAddedCount((count) => count + 1);
-      show(`Enregistré n°${registration.seq}`, 'success');
+      show(`Enregistré ${registration.day_seq}`, 'success');
       setFocus('email');
     } catch (error) {
       setError('root.server', {

@@ -62,7 +62,13 @@ export function LoginPage() {
     try {
       await signIn(email, password);
       const requestedPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(requestedPath ?? (role === 'admin' ? '/admin' : '/espace'), { replace: true });
+      const destination = requestedPath ?? (
+        role === 'admin' ? '/admin'
+          : role === 'agent' ? '/espace'
+            : role === 'receveur' ? '/receveur'
+              : '/connexion'
+      );
+      navigate(destination, { replace: true });
     } catch (error) {
       const message = translatedAuthMessage(error);
       setError('root.server', {

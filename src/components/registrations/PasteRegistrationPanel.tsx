@@ -286,7 +286,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
   ));
   const pendingEntries = eligibleEntries.filter((entry) => !results[entry.id]);
   const insertedResults = Object.values(results).filter((result) => result.ok);
-  const insertedSequences = insertedResults.flatMap((result) => result.seq === undefined ? [] : [result.seq]);
+  const insertedSequences = insertedResults.flatMap((result) => result.daySeq === undefined ? [] : [result.daySeq]);
   const allSucceededCount = insertedResults.length;
 
   return (

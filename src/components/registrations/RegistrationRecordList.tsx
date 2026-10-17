@@ -1,16 +1,28 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Check, Clipboard, Copy } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { Check, Clipboard, Copy, Send } from 'lucide-react';
 import { Badge, Button, Modal } from '../ui';
 import { formatAmount, formatDate, formatRelative } from '../../lib/format';
 import { useRegistrationHistory } from '../../hooks/useRegistrationHistory';
 import { useUnmarkExported } from '../../hooks/useRegistrationExports';
 import { useSetRegistrationStatus } from '../../hooks/useSetRegistrationStatus';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
-import type { RegistrationListItem, RegistrationStatus, RegistrationWithAgent } from '../../types/database';
+import { useAuth } from '../../hooks/useAuth';
+import {
+  useCreateCorrectionRequest,
+  useHandleCorrectionRequest,
+  useRegistrationCorrectionRequests,
+} from '../../hooks/useCorrectionRequests';
+import { useAbidjanToday } from '../../hooks/useAbidjanToday';
+import { correctionRequestSchema, type CorrectionRequestValues } from '../../lib/correction-validation';
+import { formatDailyNumber } from '../../lib/registration-days';
+import type { CorrectionRequest, RegistrationListItem, RegistrationStatus, RegistrationWithAgent } from '../../types/database';
 
 export type RegistrationDisplayItem = RegistrationListItem & {
   agent_id?: string;
   profiles?: { full_name: string } | null;
+  correction_requests?: Pick<CorrectionRequest, 'id' | 'status'>[] | null;
 };
 
 export function RegistrationRecordList<T extends RegistrationDisplayItem>({
@@ -19,6 +31,8 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
   onSelect,
   showAgent = false,
   showExportStatus = false,
+  showCorrectionStatus = false,
+  correctionRequestedIds,
   readOnly = true,
   allowStatusChange = false,
   show,
@@ -28,10 +42,13 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
   onSelect: (registration: T | null) => void;
   showAgent?: boolean;
   showExportStatus?: boolean;
+  showCorrectionStatus?: boolean;
+  correctionRequestedIds?: ReadonlySet<string>;
   readOnly?: boolean;
   allowStatusChange?: boolean;
   show?: (message: string, tone?: 'success' | 'error' | 'info') => void;
 }) {
+  const today = useAbidjanToday();
   const open = (registration: T) => onSelect(registration);
 
   return (
@@ -45,10 +62,11 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
             onClick={() => open(registration)}
           >
             <div className="registration-card-topline">
-              <span className="registration-number">N° {registration.seq}</span>
+              <span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span>
               <span className="registration-card-status">
                 <Badge status={registration.status} />
                 {showExportStatus && registration.exported_at && <ExportedBadge />}
+                {showCorrectionStatus && correctionRequestedIds?.has(registration.id) && <CorrectionRequestedBadge />}
               </span>
             </div>
             <strong className="registration-card-email">{registration.email}</strong>
@@ -76,7 +94,7 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
               <tr
                 key={registration.id}
                 tabIndex={0}
-                aria-label={`Enregistré numéro ${registration.seq}, ${registration.email}`}
+                aria-label={`Enregistré ${formatDailyNumber(registration.day_seq, registration.send_day, today)}, ${registration.email}`}
                 onClick={() => open(registration)}
                 onKeyDown={(event: KeyboardEvent<HTMLTableRowElement>) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -86,9 +104,13 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
                 }}
               >
                 {showAgent && <td>{registration.profiles?.full_name ?? '—'}</td>}
-                <td><span className="registration-number">N° {registration.seq}</span></td>
+                <td><span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span></td>
                 <td className="registration-table-email">{registration.email}</td>
-                <td><Badge status={registration.status} />{showExportStatus && registration.exported_at && <ExportedBadge />}</td>
+                <td>
+                  <Badge status={registration.status} />
+                  {showExportStatus && registration.exported_at && <ExportedBadge />}
+                  {showCorrectionStatus && correctionRequestedIds?.has(registration.id) && <CorrectionRequestedBadge />}
+                </td>
                 <td>{registration.amount === null ? '—' : formatAmount(registration.amount)}</td>
                 <td><time dateTime={registration.created_at}>{formatDate(registration.created_at)}</time></td>
               </tr>
@@ -103,6 +125,7 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
           onClose={() => onSelect(null)}
           allowStatusChange={allowStatusChange}
           showExportStatus={showExportStatus}
+          showCorrectionStatus={showCorrectionStatus}
           show={show}
         />
       )}
@@ -115,12 +138,14 @@ export function RegistrationDetails({
   onClose,
   allowStatusChange = false,
   showExportStatus = false,
+  showCorrectionStatus = false,
   show,
 }: {
   registration: RegistrationListItem | RegistrationWithAgent | null;
   onClose: () => void;
   allowStatusChange?: boolean;
   showExportStatus?: boolean;
+  showCorrectionStatus?: boolean;
   show?: (message: string, tone?: 'success' | 'error' | 'info') => void;
 }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -128,8 +153,15 @@ export function RegistrationDetails({
   const [currentStatus, setCurrentStatus] = useState(registration?.status ?? 'en_attente');
   const [currentAmount, setCurrentAmount] = useState(registration?.amount ?? null);
   const [currentExportedAt, setCurrentExportedAt] = useState(registration?.exported_at ?? null);
+  const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
   const unmarkExported = useUnmarkExported();
   const online = useOnlineStatus();
+  const { role, profile } = useAuth();
+  const today = useAbidjanToday();
+  const correctionRequests = useRegistrationCorrectionRequests(registration?.id ?? '');
+  const correctionRequest = useCreateCorrectionRequest();
+  const handleCorrection = useHandleCorrectionRequest();
+  const openCorrection = correctionRequests.data?.find((request) => request.status === 'ouverte');
 
   useEffect(() => {
     setPasswordVisible(false);
@@ -137,6 +169,7 @@ export function RegistrationDetails({
     setCurrentStatus(registration?.status ?? 'en_attente');
     setCurrentAmount(registration?.amount ?? null);
     setCurrentExportedAt(registration?.exported_at ?? null);
+    setCorrectionModalOpen(false);
   }, [registration?.id]);
 
   const copyValue = async (value: string, type: 'email' | 'password') => {
@@ -150,118 +183,362 @@ export function RegistrationDetails({
   };
 
   return (
-    <Modal
-      open={Boolean(registration)}
-      title="Détail de l’enregistrement"
-      onClose={onClose}
-      className="registration-detail-modal"
-      backdropClassName="registration-detail-backdrop"
-    >
-      {registration && (
-        <div className="registration-detail-content">
-          <div className="registration-detail-row">
-            <span className="registration-number">N° {registration.seq}</span>
-            <span className="registration-card-status">
-              <Badge status={currentStatus} />
-              {showExportStatus && currentExportedAt && <ExportedBadge />}
-            </span>
-          </div>
-          {'profiles' in registration && registration.profiles?.full_name && (
-            <DetailField label="Utilisateur">
-              <span className="registration-detail-value">{registration.profiles.full_name}</span>
-            </DetailField>
-          )}
-          <DetailField label="E-mail">
-            <span className="registration-detail-value">{registration.email}</span>
-            <Button
-              className="copy-field-button"
-              variant="ghost"
-              aria-label="Copier l’e-mail"
-              onClick={() => void copyValue(registration.email, 'email')}
-            >
-              {copied === 'email' ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
-              <span>{copied === 'email' ? 'Copié' : 'Copier'}</span>
-            </Button>
-          </DetailField>
-          <DetailField label="Mot de passe">
-            <span className="registration-detail-value registration-password-value">
-              {passwordVisible ? registration.mdp : '••••••••'}
-            </span>
-            <div className="registration-password-actions">
-              <Button
-                className="copy-field-button"
-                variant="ghost"
-                onClick={() => setPasswordVisible((visible) => !visible)}
-                aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                aria-pressed={passwordVisible}
-              >
-                {passwordVisible ? 'Masquer' : 'Afficher'}
-              </Button>
-              <Button
-                className="copy-field-button"
-                variant="ghost"
-                aria-label="Copier le mot de passe"
-                onClick={() => void copyValue(registration.mdp, 'password')}
-              >
-                {copied === 'password' ? <Check size={17} aria-hidden="true" /> : <Clipboard size={17} aria-hidden="true" />}
-                <span>{copied === 'password' ? 'Copié' : 'Copier'}</span>
-              </Button>
+    <>
+      <Modal
+        open={Boolean(registration) && !correctionModalOpen}
+        title="Détail de l’enregistrement"
+        onClose={onClose}
+        className="registration-detail-modal"
+        backdropClassName="registration-detail-backdrop"
+      >
+        {registration && (
+          <div className="registration-detail-content">
+            <div className="registration-detail-row">
+              <span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span>
+              <span className="registration-card-status">
+                <Badge status={currentStatus} />
+                {showExportStatus && currentExportedAt && <ExportedBadge />}
+                {showCorrectionStatus && openCorrection && <CorrectionRequestedBadge />}
+              </span>
             </div>
-          </DetailField>
-          <DetailField label="Montant">
-            <span className="registration-detail-value">
-              {currentAmount === null ? '—' : formatAmount(currentAmount)}
-            </span>
-          </DetailField>
-          <DetailField label="Date d’enregistrement">
-            <time className="registration-detail-value" dateTime={registration.created_at}>
-              {formatDate(registration.created_at)}
-            </time>
-          </DetailField>
-          {showExportStatus && currentExportedAt && (
-            <DetailField label="Envoi WhatsApp">
-              <div className="registration-export-detail">
-                <span>Envoyé sur WhatsApp le {formatDate(currentExportedAt)}</span>
+            {'profiles' in registration && registration.profiles?.full_name && (
+              <DetailField label="Utilisateur">
+                <span className="registration-detail-value">{registration.profiles.full_name}</span>
+              </DetailField>
+            )}
+            <DetailField label="E-mail">
+              <span className="registration-detail-value">{registration.email}</span>
+              <Button
+                className="copy-field-button"
+                variant="ghost"
+                aria-label="Copier l’e-mail"
+                onClick={() => void copyValue(registration.email, 'email')}
+              >
+                {copied === 'email' ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
+                <span>{copied === 'email' ? 'Copié' : 'Copier'}</span>
+              </Button>
+            </DetailField>
+            <DetailField label="Mot de passe">
+              <span className="registration-detail-value registration-password-value">
+                {passwordVisible ? registration.mdp : '••••••••'}
+              </span>
+              <div className="registration-password-actions">
                 <Button
-                  className="registration-unmark-exported"
+                  className="copy-field-button"
                   variant="ghost"
-                  loading={unmarkExported.isPending}
-                  disabled={!online || unmarkExported.isPending}
-                  onClick={async () => {
-                    if (!window.confirm('Remettre cet enregistré en non envoyé ?')) return;
-                    try {
-                      await unmarkExported.mutateAsync(registration.id);
-                      setCurrentExportedAt(null);
-                      show?.('Enregistré remis en non envoyé.', 'success');
-                    } catch (error) {
-                      show?.(error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.', 'error');
-                    }
-                  }}
+                  onClick={() => setPasswordVisible((visible) => !visible)}
+                  aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  aria-pressed={passwordVisible}
                 >
-                  Remettre en non envoyé
+                  {passwordVisible ? 'Masquer' : 'Afficher'}
+                </Button>
+                <Button
+                  className="copy-field-button"
+                  variant="ghost"
+                  aria-label="Copier le mot de passe"
+                  onClick={() => void copyValue(registration.mdp, 'password')}
+                >
+                  {copied === 'password' ? <Check size={17} aria-hidden="true" /> : <Clipboard size={17} aria-hidden="true" />}
+                  <span>{copied === 'password' ? 'Copié' : 'Copier'}</span>
                 </Button>
               </div>
             </DetailField>
-          )}
-          {registration.confirmed_at && (
-            <DetailField label="Date de confirmation">
-              <time className="registration-detail-value" dateTime={registration.confirmed_at}>
-                {formatDate(registration.confirmed_at)}
+            <DetailField label="Montant">
+              <span className="registration-detail-value">
+                {currentAmount === null ? '—' : formatAmount(currentAmount)}
+              </span>
+            </DetailField>
+            <DetailField label="Date d’enregistrement">
+              <time className="registration-detail-value" dateTime={registration.created_at}>
+                {formatDate(registration.created_at)}
               </time>
             </DetailField>
-          )}
-          {allowStatusChange && (
-            <StatusManagement
-              registration={registration}
-              onSaved={(status, amount) => {
-                setCurrentStatus(status);
-                setCurrentAmount(amount);
-              }}
-              show={show}
-            />
-          )}
+            {showExportStatus && currentExportedAt && (
+              <DetailField label="Envoi WhatsApp">
+                <div className="registration-export-detail">
+                  <span>Envoyé sur WhatsApp le {formatDate(currentExportedAt)}</span>
+                  <Button
+                    className="registration-unmark-exported"
+                    variant="ghost"
+                    loading={unmarkExported.isPending}
+                    disabled={!online || unmarkExported.isPending}
+                    onClick={async () => {
+                      if (!window.confirm('Remettre cet enregistré en non envoyé ?')) return;
+                      try {
+                        await unmarkExported.mutateAsync(registration.id);
+                        setCurrentExportedAt(null);
+                        show?.('Enregistré remis en non envoyé.', 'success');
+                      } catch (error) {
+                        show?.(error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                      }
+                    }}
+                  >
+                    Remettre en non envoyé
+                  </Button>
+                </div>
+              </DetailField>
+            )}
+            {registration.confirmed_at && (
+              <DetailField label="Date de confirmation">
+                <time className="registration-detail-value" dateTime={registration.confirmed_at}>
+                  {formatDate(registration.confirmed_at)}
+                </time>
+              </DetailField>
+            )}
+            {role === 'agent' && (
+              <CorrectionRequestSection
+                requests={correctionRequests.data ?? []}
+                loading={correctionRequests.isPending}
+                error={correctionRequests.error?.message ?? null}
+                openRequestExists={Boolean(openCorrection)}
+                online={online}
+                onRetry={() => void correctionRequests.refetch()}
+                onRequest={() => setCorrectionModalOpen(true)}
+              />
+            )}
+            {role === 'admin' && showCorrectionStatus && (
+              <AdminCorrectionSection
+                registration={registration}
+                requests={correctionRequests.data ?? []}
+                loading={correctionRequests.isPending}
+                error={correctionRequests.error?.message ?? null}
+                online={online}
+                pending={handleCorrection.isPending}
+                onRetry={() => void correctionRequests.refetch()}
+                onHandle={async (requestId) => {
+                  try {
+                    await handleCorrection.mutateAsync({ requestId, registrationId: registration.id });
+                    show?.('Demande de correction marquée comme traitée.', 'success');
+                  } catch (error) {
+                    show?.(error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                  }
+                }}
+              />
+            )}
+            {allowStatusChange && (
+              <StatusManagement
+                registration={registration}
+                onSaved={(status, amount) => {
+                  setCurrentStatus(status);
+                  setCurrentAmount(amount);
+                }}
+                show={show}
+              />
+            )}
+          </div>
+        )}
+      </Modal>
+      <CorrectionRequestModal
+        open={Boolean(registration) && correctionModalOpen}
+        onClose={() => setCorrectionModalOpen(false)}
+        onSent={() => {
+          setCorrectionModalOpen(false);
+          show?.('Demande envoyée à l’administrateur', 'success');
+        }}
+        online={online}
+        pending={correctionRequest.isPending}
+        onSubmit={async (message) => {
+          if (!registration || role !== 'agent' || !profile || correctionRequest.isPending) return;
+          await correctionRequest.mutateAsync({ registrationId: registration.id, message });
+        }}
+      />
+    </>
+  );
+}
+
+function CorrectionRequestedBadge() {
+  return <span className="correction-requested-badge">Correction demandée</span>;
+}
+
+function CorrectionRequestSection({
+  requests,
+  loading,
+  error,
+  openRequestExists,
+  online,
+  onRetry,
+  onRequest,
+}: {
+  requests: CorrectionRequest[];
+  loading: boolean;
+  error: string | null;
+  openRequestExists: boolean;
+  online: boolean;
+  onRetry: () => void;
+  onRequest: () => void;
+}) {
+  return (
+    <section className="correction-request-section" aria-labelledby="agent-correction-title">
+      <h3 id="agent-correction-title">Demandes de correction</h3>
+      {loading ? (
+        <p role="status">Chargement des demandes…</p>
+      ) : error ? (
+        <div className="registration-history-error" role="alert">
+          <span>{error}</span><Button variant="ghost" onClick={onRetry}>Réessayer</Button>
         </div>
+      ) : (
+        <>
+          {requests.map((request) => (
+            <article className="correction-request-item" key={request.id}>
+              <p>{request.message}</p>
+              <span className={`correction-status correction-status-${request.status}`}>
+                {request.status === 'ouverte' ? 'Correction demandée' : 'Correction traitée'}
+              </span>
+              <time dateTime={request.status === 'traitee' ? request.handled_at ?? request.created_at : request.created_at}>
+                {request.status === 'traitee' && request.handled_at
+                  ? `Traitée le ${formatDate(request.handled_at)}`
+                  : `Demandée le ${formatDate(request.created_at)}`}
+              </time>
+            </article>
+          ))}
+          {openRequestExists ? (
+            <Button variant="secondary" disabled><Check size={16} aria-hidden="true" /> Correction demandée</Button>
+          ) : (
+            <Button variant="secondary" onClick={onRequest} disabled={!online}>
+              <Send size={16} aria-hidden="true" /> Demander une correction
+            </Button>
+          )}
+          {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour demander une correction.</p>}
+        </>
       )}
+    </section>
+  );
+}
+
+function AdminCorrectionSection({
+  registration,
+  requests,
+  loading,
+  error,
+  online,
+  pending,
+  onRetry,
+  onHandle,
+}: {
+  registration: RegistrationListItem | RegistrationWithAgent;
+  requests: CorrectionRequest[];
+  loading: boolean;
+  error: string | null;
+  online: boolean;
+  pending: boolean;
+  onRetry: () => void;
+  onHandle: (requestId: string) => Promise<void>;
+}) {
+  const openRequest = requests.find((request) => request.status === 'ouverte');
+  if (!loading && !error && !openRequest) return null;
+
+  return (
+    <section className="correction-request-section" aria-labelledby="admin-correction-title">
+      <h3 id="admin-correction-title">Demande de correction</h3>
+      {loading ? (
+        <p role="status">Chargement de la demande…</p>
+      ) : error ? (
+        <div className="registration-history-error" role="alert">
+          <span>{error}</span><Button variant="ghost" onClick={onRetry}>Réessayer</Button>
+        </div>
+      ) : openRequest ? (
+        <article className="correction-request-item">
+          <p>{openRequest.message}</p>
+          <span>{'profiles' in registration ? registration.profiles?.full_name ?? 'Utilisateur' : 'Utilisateur'}</span>
+          <time dateTime={openRequest.created_at}>{formatDate(openRequest.created_at)}</time>
+          <Button
+            variant="primary"
+            loading={pending}
+            disabled={!online || pending}
+            onClick={() => void onHandle(openRequest.id)}
+          >
+            Marquer comme traitée
+          </Button>
+          {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour traiter cette demande.</p>}
+        </article>
+      ) : null}
+    </section>
+  );
+}
+
+function CorrectionRequestModal({
+  open,
+  onClose,
+  onSent,
+  online,
+  pending,
+  onSubmit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSent: () => void;
+  online: boolean;
+  pending: boolean;
+  onSubmit: (message: string) => Promise<void>;
+}) {
+  const form = useForm<CorrectionRequestValues>({
+    resolver: zodResolver(correctionRequestSchema),
+    mode: 'onChange',
+    defaultValues: { message: '' },
+  });
+  const message = form.watch('message') ?? '';
+
+  useEffect(() => {
+    if (open) {
+      form.reset({ message: '' });
+      form.clearErrors();
+    }
+  }, [open, form]);
+
+  const send = form.handleSubmit(async ({ message: cleanMessage }) => {
+    if (pending || !online) return;
+    form.clearErrors('root.server');
+    try {
+      await onSubmit(cleanMessage);
+      form.reset({ message: '' });
+      onSent();
+    } catch (error) {
+      form.setError('root.server', {
+        message: error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.',
+      });
+    }
+  });
+
+  return (
+    <Modal
+      open={open}
+      title="Demander une correction"
+      onClose={onClose}
+      className="correction-request-modal"
+      backdropClassName="registration-detail-backdrop"
+      descriptionId="correction-request-description"
+    >
+      <form className="correction-request-form" onSubmit={(event) => void send(event)} noValidate>
+        <p id="correction-request-description" className="modal-description">
+          Décrivez les informations à corriger. Votre demande sera envoyée à l’administrateur.
+        </p>
+        <label className="field">
+          <span className="field-label">Message</span>
+          <textarea
+            className="input correction-request-message"
+            rows={4}
+            maxLength={300}
+            aria-label="Message de correction, 3 à 300 caractères"
+            aria-invalid={Boolean(form.formState.errors.message)}
+            aria-describedby="correction-message-help correction-message-count"
+            {...form.register('message')}
+          />
+        </label>
+        <div className="correction-request-footer">
+          <span id="correction-message-help" className="field-hint">
+            {form.formState.errors.message?.message ?? 'Entre 3 et 300 caractères après retrait des espaces autour.'}
+          </span>
+          <span id="correction-message-count" className="registration-note-count">{message.trim().length}/300</span>
+        </div>
+        {form.formState.errors.root?.server && <p className="registration-form-error" role="alert">{form.formState.errors.root.server.message}</p>}
+        {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour envoyer la demande.</p>}
+        <div className="admin-confirm-actions">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>Annuler</Button>
+          <Button type="submit" loading={pending} disabled={!online || pending || !form.formState.isValid}>
+            Envoyer
+          </Button>
+        </div>
+      </form>
     </Modal>
   );
 }

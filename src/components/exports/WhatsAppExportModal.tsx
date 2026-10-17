@@ -77,6 +77,8 @@ export function WhatsAppExportModal({ open, agent, onClose }: WhatsAppExportModa
   ), [rows, scope, status, unexported]);
   const entries: WhatsAppEntry[] = scopedRows.map((row) => ({
     seq: row.seq,
+    day_seq: row.day_seq,
+    send_day: row.send_day,
     email: row.email,
     mdp: row.mdp,
     agentName: row.profiles?.full_name ?? agent?.full_name ?? '',

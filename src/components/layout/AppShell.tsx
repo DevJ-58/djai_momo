@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { CircleUserRound, ClipboardList, LayoutDashboard, LogOut, Plus, Sparkles, Users } from 'lucide-react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
 import { toTitleCase } from '../../lib/format';
-import { passwordWithConfirmationSchema, translatedAuthMessage } from '../../lib/auth-validation';
 import { useToast } from '../../hooks/use-toast';
-import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { BottomNavItem } from './BottomNavItem';
-import { Avatar, Button, Logo, Modal } from '../ui';
+import { Avatar, Button, Logo } from '../ui';
+import { ProfileModal } from '../profile/ProfileModal';
 import { ToastViewport } from './ToastViewport';
 import { APP_NAME } from '../../lib/brand';
 
@@ -33,17 +31,18 @@ const agentNavigation: NavigationItem[] = [
   { label: 'Ajouter', mobileLabel: 'Ajouter', to: '/espace/ajouter', icon: Plus },
 ];
 
-type PasswordValues = z.infer<typeof passwordWithConfirmationSchema>;
-
 export function AppShell() {
-  const { profile, role, signOut, updatePassword } = useAuth();
+  const { profile, role, signOut } = useAuth();
+  const isReceiver = role === 'receveur';
+  const { pathname } = useLocation();
+  useRealtimeSync();
+  const queryClient = useQueryClient();
   const [profileOpen, setProfileOpen] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
   const { toasts, show, dismiss } = useToast();
-  const online = useOnlineStatus();
   const navigate = useNavigate();
+  const receiverUserPage = pathname.startsWith('/receveur/u/');
   const navigation = role === 'admin'
     ? adminNavigation
     : role === 'agent'
@@ -51,18 +50,17 @@ export function AppShell() {
       : import.meta.env.DEV
       ? [{ label: 'Design system', mobileLabel: 'Design', to: '/design-system', icon: Sparkles }]
         : [];
-  const roleLabel = role === 'admin' ? 'Administrateur' : 'Agent';
-  const passwordForm = useForm<PasswordValues>({
-    resolver: zodResolver(passwordWithConfirmationSchema),
-    defaultValues: { password: '', confirmPassword: '' },
-  });
-
+  const roleLabel = role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : 'Receveur';
   const handleSignOut = async () => {
     if (signingOut) return;
     setSignOutError(null);
     setSigningOut(true);
     try {
       await signOut();
+      if (isReceiver) {
+        queryClient.removeQueries({ queryKey: ['receiver-items'] });
+        queryClient.removeQueries({ queryKey: ['receiver-blocks'] });
+      }
       setProfileOpen(false);
       navigate('/connexion', { replace: true });
     } catch (error) {
@@ -72,16 +70,63 @@ export function AppShell() {
     }
   };
 
-  const changePassword = passwordForm.handleSubmit(async ({ password }) => {
-    setPasswordError(null);
-    try {
-      await updatePassword(password);
-      passwordForm.reset();
-      show('Votre mot de passe a été modifié.', 'success');
-    } catch (error) {
-      setPasswordError(translatedAuthMessage(error));
-    }
-  });
+  if (isReceiver) {
+    return (
+      <div className="app-shell receiver-app-shell">
+        <div className="ambient-background" aria-hidden="true">
+          <span className="ambient-halo halo-yellow" />
+          <span className="ambient-halo halo-peach" />
+          <span className="ambient-halo halo-lemon" />
+        </div>
+        <header className={`receiver-global-header glass${receiverUserPage ? ' receiver-global-header-static' : ''}`} aria-label="En-tête receveur">
+          <div className="receiver-global-header-inner">
+            <Logo variant="icon" size={24} />
+            <span className="receiver-live-indicator" title="En direct" aria-label="En direct" role="status">
+              <span className="receiver-live-dot" aria-hidden="true" />
+              <span className="sr-only">En direct</span>
+            </span>
+            <button
+              type="button"
+              className="receiver-profile-avatar"
+              aria-label={`Ouvrir le profil de ${profile?.full_name ?? 'votre compte'}`}
+              aria-haspopup="dialog"
+              aria-expanded={profileOpen}
+              onClick={() => setProfileOpen(true)}
+            >
+              <span className="receiver-profile-initial">
+                {profile?.full_name.trim().charAt(0).toLocaleUpperCase('fr') || '?'}
+              </span>
+            </button>
+          </div>
+        </header>
+        <main className="main-content receiver-main-content">
+          <Outlet />
+        </main>
+        {profile && (
+          <ProfileModal
+            open={profileOpen}
+            receiver
+            onClose={() => setProfileOpen(false)}
+            onToast={show}
+            footer={(
+              <div className="receiver-profile-footer">
+                {signOutError && <p className="auth-error" role="alert">{signOutError}</p>}
+                <Button
+                  variant="secondary"
+                  className="profile-signout receiver-profile-signout"
+                  loading={signingOut}
+                  onClick={() => void handleSignOut()}
+                >
+                  <LogOut size={18} aria-hidden="true" /> Se déconnecter
+                </Button>
+              </div>
+            )}
+          />
+        )}
+        <ToastViewport toasts={toasts} dismiss={dismiss} />
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -163,37 +208,19 @@ export function AppShell() {
         )}
       </nav>
       {profile && (
-        <Modal open={profileOpen} title="Votre profil" onClose={() => setProfileOpen(false)}>
-          <div className="profile-sheet">
-            <div className="profile-sheet-heading">
-              <Avatar name={profile.full_name} size="large" />
-              <div><strong>{profile.full_name}</strong><span>{roleLabel}</span></div>
-            </div>
-            <div className="profile-detail"><span>WhatsApp</span><strong>{profile.whatsapp}</strong></div>
-            <form className="profile-password-form" onSubmit={changePassword} noValidate>
-              <h3>Changer mon mot de passe</h3>
-              <label className="field">
-                <span className="field-label">Nouveau mot de passe</span>
-                <input className="input" type="password" autoComplete="new-password" {...passwordForm.register('password')} />
-                {passwordForm.formState.errors.password?.message && <span className="field-error">{passwordForm.formState.errors.password.message}</span>}
-              </label>
-              <label className="field">
-                <span className="field-label">Confirmer le mot de passe</span>
-                <input className="input" type="password" autoComplete="new-password" {...passwordForm.register('confirmPassword')} />
-                {passwordForm.formState.errors.confirmPassword?.message && <span className="field-error">{passwordForm.formState.errors.confirmPassword.message}</span>}
-              </label>
-              {passwordError && <p className="auth-error" role="alert">{passwordError}</p>}
-              {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour modifier votre mot de passe.</p>}
-              <Button type="submit" loading={passwordForm.formState.isSubmitting} disabled={!online || passwordForm.formState.isSubmitting}>
-                Changer mon mot de passe
+        <ProfileModal
+          open={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          onToast={show}
+          footer={(
+            <>
+              {signOutError && <p className="auth-error" role="alert">{signOutError}</p>}
+              <Button className="profile-signout" loading={signingOut} onClick={() => void handleSignOut()}>
+                <LogOut size={18} aria-hidden="true" /> Se déconnecter
               </Button>
-            </form>
-            {signOutError && <p className="auth-error" role="alert">{signOutError}</p>}
-            <Button className="profile-signout" loading={signingOut} onClick={() => void handleSignOut()}>
-              <LogOut size={18} aria-hidden="true" /> Se déconnecter
-            </Button>
-          </div>
-        </Modal>
+            </>
+          )}
+        />
       )}
       <ToastViewport toasts={toasts} dismiss={dismiss} />
     </div>
