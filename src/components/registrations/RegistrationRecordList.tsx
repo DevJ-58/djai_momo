@@ -7,6 +7,8 @@ import { formatAmount, formatDate, formatRelative } from '../../lib/format';
 import { useRegistrationHistory } from '../../hooks/useRegistrationHistory';
 import { useUnmarkExported } from '../../hooks/useRegistrationExports';
 import { useSetRegistrationStatus } from '../../hooks/useSetRegistrationStatus';
+import { useUpdateRegistrationInfo } from '../../hooks/useUpdateRegistrationInfo';
+import { useDeleteRegistrations } from '../../hooks/useDeleteRegistrations';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -154,6 +156,12 @@ export function RegistrationDetails({
   const [currentAmount, setCurrentAmount] = useState(registration?.amount ?? null);
   const [currentExportedAt, setCurrentExportedAt] = useState(registration?.exported_at ?? null);
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [emailInput, setEmailInput] = useState(registration?.email ?? '');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const updateInfo = useUpdateRegistrationInfo();
+  const deleteRegistrations = useDeleteRegistrations();
   const unmarkExported = useUnmarkExported();
   const online = useOnlineStatus();
   const { role, profile } = useAuth();
@@ -170,7 +178,53 @@ export function RegistrationDetails({
     setCurrentAmount(registration?.amount ?? null);
     setCurrentExportedAt(registration?.exported_at ?? null);
     setCorrectionModalOpen(false);
+    setEditMode(false);
+    setEmailInput(registration?.email ?? '');
+    setPasswordInput('');
+    setFormError(null);
   }, [registration?.id]);
+
+  const saveAdminUpdate = async () => {
+    if (!registration || role !== 'admin') return;
+    const trimmedEmail = emailInput.trim();
+    const trimmedPassword = passwordInput.trim();
+    const payload: { email?: string; mdp?: string } = {};
+
+    if (trimmedEmail && trimmedEmail !== registration.email) payload.email = trimmedEmail;
+    if (trimmedPassword) payload.mdp = trimmedPassword;
+
+    if (Object.keys(payload).length === 0) {
+      setFormError('Aucune modification à enregistrer.');
+      return;
+    }
+
+    try {
+      setFormError(null);
+      await updateInfo.mutateAsync({ registrationId: registration.id, values: payload });
+      setEditMode(false);
+      setEmailInput(trimmedEmail || registration.email);
+      setPasswordInput('');
+      show?.('Informations mises à jour.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.';
+      setFormError(message);
+      show?.(message, 'error');
+    }
+  };
+
+  const deleteSingleRegistration = async () => {
+    if (!registration || role !== 'admin') return;
+    if (!window.confirm('Supprimer cet enregistrement ?')) return;
+
+    try {
+      await deleteRegistrations.mutateAsync([registration.id]);
+      onClose();
+      show?.('Enregistrement supprimé.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.';
+      show?.(message, 'error');
+    }
+  };
 
   const copyValue = async (value: string, type: 'email' | 'password') => {
     try {
@@ -206,43 +260,69 @@ export function RegistrationDetails({
                 <span className="registration-detail-value">{registration.profiles.full_name}</span>
               </DetailField>
             )}
-            <DetailField label="E-mail">
-              <span className="registration-detail-value">{registration.email}</span>
-              <Button
-                className="copy-field-button"
-                variant="ghost"
-                aria-label="Copier l’e-mail"
-                onClick={() => void copyValue(registration.email, 'email')}
-              >
-                {copied === 'email' ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
-                <span>{copied === 'email' ? 'Copié' : 'Copier'}</span>
-              </Button>
-            </DetailField>
-            <DetailField label="Mot de passe">
-              <span className="registration-detail-value registration-password-value">
-                {passwordVisible ? registration.mdp : '••••••••'}
-              </span>
-              <div className="registration-password-actions">
-                <Button
-                  className="copy-field-button"
-                  variant="ghost"
-                  onClick={() => setPasswordVisible((visible) => !visible)}
-                  aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-                  aria-pressed={passwordVisible}
-                >
-                  {passwordVisible ? 'Masquer' : 'Afficher'}
-                </Button>
-                <Button
-                  className="copy-field-button"
-                  variant="ghost"
-                  aria-label="Copier le mot de passe"
-                  onClick={() => void copyValue(registration.mdp, 'password')}
-                >
-                  {copied === 'password' ? <Check size={17} aria-hidden="true" /> : <Clipboard size={17} aria-hidden="true" />}
-                  <span>{copied === 'password' ? 'Copié' : 'Copier'}</span>
-                </Button>
-              </div>
-            </DetailField>
+            {role === 'admin' && editMode ? (
+              <>
+                <DetailField label="E-mail">
+                  <input
+                    className="input registration-edit-input"
+                    type="email"
+                    value={emailInput}
+                    onChange={(event) => setEmailInput(event.target.value)}
+                    aria-label="Modifier l’e-mail"
+                  />
+                </DetailField>
+                <DetailField label="Mot de passe">
+                  <input
+                    className="input registration-edit-input"
+                    type="text"
+                    value={passwordInput}
+                    onChange={(event) => setPasswordInput(event.target.value)}
+                    placeholder="Nouveau mot de passe"
+                    aria-label="Nouveau mot de passe"
+                  />
+                </DetailField>
+              </>
+            ) : (
+              <>
+                <DetailField label="E-mail">
+                  <span className="registration-detail-value">{registration.email}</span>
+                  <Button
+                    className="copy-field-button"
+                    variant="ghost"
+                    aria-label="Copier l’e-mail"
+                    onClick={() => void copyValue(registration.email, 'email')}
+                  >
+                    {copied === 'email' ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
+                    <span>{copied === 'email' ? 'Copié' : 'Copier'}</span>
+                  </Button>
+                </DetailField>
+                <DetailField label="Mot de passe">
+                  <span className="registration-detail-value registration-password-value">
+                    {passwordVisible ? registration.mdp : '••••••••'}
+                  </span>
+                  <div className="registration-password-actions">
+                    <Button
+                      className="copy-field-button"
+                      variant="ghost"
+                      onClick={() => setPasswordVisible((visible) => !visible)}
+                      aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                      aria-pressed={passwordVisible}
+                    >
+                      {passwordVisible ? 'Masquer' : 'Afficher'}
+                    </Button>
+                    <Button
+                      className="copy-field-button"
+                      variant="ghost"
+                      aria-label="Copier le mot de passe"
+                      onClick={() => void copyValue(registration.mdp, 'password')}
+                    >
+                      {copied === 'password' ? <Check size={17} aria-hidden="true" /> : <Clipboard size={17} aria-hidden="true" />}
+                      <span>{copied === 'password' ? 'Copié' : 'Copier'}</span>
+                    </Button>
+                  </div>
+                </DetailField>
+              </>
+            )}
             <DetailField label="Montant">
               <span className="registration-detail-value">
                 {currentAmount === null ? '—' : formatAmount(currentAmount)}
@@ -315,6 +395,28 @@ export function RegistrationDetails({
                 }}
               />
             )}
+            {role === 'admin' && (
+              <section className="registration-admin-actions" aria-label="Actions administrateur">
+                {!editMode ? (
+                  <Button variant="secondary" onClick={() => setEditMode(true)} disabled={!online}>
+                    Modifier
+                  </Button>
+                ) : (
+                  <div className="admin-confirm-actions">
+                    <Button type="button" variant="secondary" onClick={() => { setEditMode(false); setFormError(null); setPasswordInput(''); setEmailInput(registration.email); }} disabled={updateInfo.isPending}>
+                      Annuler
+                    </Button>
+                    <Button variant="primary" loading={updateInfo.isPending} disabled={!online || updateInfo.isPending} onClick={() => void saveAdminUpdate()}>
+                      Enregistrer
+                    </Button>
+                  </div>
+                )}
+                <Button variant="danger" loading={deleteRegistrations.isPending} disabled={!online || deleteRegistrations.isPending} onClick={() => void deleteSingleRegistration()}>
+                  Supprimer
+                </Button>
+              </section>
+            )}
+            {formError && <p className="registration-form-error" role="alert">{formError}</p>}
             {allowStatusChange && (
               <StatusManagement
                 registration={registration}

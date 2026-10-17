@@ -10,11 +10,18 @@ export function registrationErrorMessage(error: unknown): string {
   const details = `${code} ${message}`;
 
   if (code === '23505') {
-    return DUPLICATE_REGISTRATION_MESSAGE;
+    return 'Cet email existe déjà dans la liste de cet utilisateur.';
+  }
+  if (code === '23514' || code === 'not_null') {
+    return 'L’email et le mot de passe sont obligatoires.';
+  }
+  if (code === '42501') {
+    return 'Action non autorisée.';
+  }
+  if (code === '54000') {
+    return 'Trop d’enregistrés à la fois : sélectionnez-en moins.';
   }
   if (
-    code === '42501' ||
-    code === '23514' ||
     details.includes('row-level security') ||
     details.includes('row level security') ||
     details.includes('policy') ||
@@ -34,6 +41,10 @@ export function registrationErrorMessage(error: unknown): string {
     return 'Pas de connexion. Réessayez une fois en ligne.';
   }
   return 'Une erreur est survenue. Veuillez réessayer.';
+}
+
+export function adminRegistrationErrorMessage(error: unknown): string {
+  return registrationErrorMessage(error);
 }
 
 export function registrationStatusErrorMessage(error: unknown): string {
