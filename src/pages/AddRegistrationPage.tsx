@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Info, LockKeyhole, Mail } from 'lucide-react';
+import { Eye, EyeOff, Info, LockKeyhole, UserRound } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -10,13 +10,18 @@ import { PasteRegistrationPanel } from '../components/registrations/PasteRegistr
 import { useAddRegistration } from '../hooks/useAddRegistration';
 import { useToast } from '../hooks/use-toast';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { identifierSchema } from '../lib/parseIdentifier';
+import { numeroSchema, parseNumero } from '../lib/numero';
+import { descriptionSchema } from '../lib/description';
 
 const addRegistrationSchema = z.object({
-  email: z.string().trim().email('Saisissez une adresse e-mail valide.').max(254, 'L’e-mail ne peut pas dépasser 254 caractères.'),
-  mdp: z.string().min(1, 'Saisissez un mot de passe.').max(100, 'Le mot de passe ne peut pas dépasser 100 caractères.'),
+  email: identifierSchema,
+  mdp: z.string().trim().min(1, 'Saisissez un mot de passe.').max(100, 'Le mot de passe ne peut pas dépasser 100 caractères.'),
+  numero: numeroSchema,
+  description: descriptionSchema,
 });
 
-type AddRegistrationValues = z.infer<typeof addRegistrationSchema>;
+type AddRegistrationValues = z.input<typeof addRegistrationSchema>;
 
 type RegistrationMode = 'saisie' | 'coller';
 const MODE_PREFERENCE_KEY = 'registration-add-mode';
@@ -51,14 +56,17 @@ export function AddRegistrationPage() {
     register,
     handleSubmit,
     reset,
+    watch,
     setFocus,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useForm<AddRegistrationValues>({
+  } = useForm<AddRegistrationValues, undefined, z.output<typeof addRegistrationSchema>>({
     resolver: zodResolver(addRegistrationSchema),
-    defaultValues: { email: '', mdp: '' },
+    defaultValues: { email: '', mdp: '', numero: '', description: '' },
   });
+  const numeroField = register('numero');
+  const description = watch('description') ?? '';
 
   const selectMode = (nextMode: RegistrationMode) => {
     storeMode(nextMode);
@@ -67,10 +75,10 @@ export function AddRegistrationPage() {
     setSearchParams(nextParams, { replace: true });
   };
 
-  const submit = handleSubmit(async ({ email, mdp }) => {
+  const submit = handleSubmit(async ({ email, mdp, numero, description: cleanDescription }) => {
     clearErrors('root.server');
     try {
-      const registration = await mutation.mutateAsync({ email, mdp });
+      const registration = await mutation.mutateAsync({ email, mdp, numero, description: cleanDescription });
       reset();
       setPasswordVisible(false);
       setAddedCount((count) => count + 1);
@@ -97,7 +105,7 @@ export function AddRegistrationPage() {
       <Card className="add-registration-card">
         <div className="simulation-notice" role="note">
           <Info size={21} aria-hidden="true" />
-          <p>Données de simulation : saisissez uniquement des informations fictives. N'entrez jamais l'email ou le mot de passe d'un vrai compte.</p>
+          <p>Données de simulation : saisissez uniquement des informations fictives. N'entrez jamais l'identifiant ou le mot de passe d'un vrai compte.</p>
         </div>
         <div className="registration-add-tabs" role="tablist" aria-label="Mode d’ajout">
           <button
@@ -129,12 +137,15 @@ export function AddRegistrationPage() {
         <form id="registration-panel-saisie" className="add-registration-form" role="tabpanel" aria-labelledby="registration-tab-saisie" onSubmit={submit} noValidate>
           {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour ajouter un enregistré.</p>}
           <Input
-            label="E-mail"
-            type="email"
+            label="E-mail ou pseudo"
+            type="text"
             inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoComplete="off"
-            placeholder="exemple@simulation.com"
-            icon={<Mail size={18} aria-hidden="true" />}
+            placeholder="email ou pseudo"
+            icon={<UserRound size={18} aria-hidden="true" />}
             error={errors.email?.message}
             {...register('email')}
           />
@@ -160,6 +171,46 @@ export function AddRegistrationPage() {
                 : <Eye size={19} aria-hidden="true" />}
             </button>
           </div>
+          <Input
+            label="Numéro (facultatif)"
+            type="tel"
+            inputMode="tel"
+            autoComplete="off"
+            placeholder="07 00 00 00 00"
+            error={errors.numero?.message}
+            {...numeroField}
+            onBlur={(event) => {
+              void numeroField.onBlur(event);
+              try {
+                parseNumero(event.target.value);
+                clearErrors('numero');
+              } catch (error) {
+                setError('numero', {
+                  message: error instanceof Error ? error.message : 'Numéro invalide : chiffres uniquement, 4 à 20.',
+                });
+              }
+            }}
+          />
+          <label className="field add-registration-description-field">
+            <span className="field-label">Description (facultatif)</span>
+            <textarea
+              className="input registration-description-input"
+              rows={3}
+              maxLength={300}
+              autoComplete="off"
+              spellCheck
+              aria-label="Description (facultatif)"
+              aria-invalid={Boolean(errors.description)}
+              aria-describedby="add-description-error add-description-count"
+              {...register('description')}
+            />
+            {errors.description?.message && (
+              <span id="add-description-error" className="registration-form-error" role="alert">
+                {errors.description.message}
+              </span>
+            )}
+            <span id="add-description-count" className="registration-note-count">{description.length}/300</span>
+          </label>
           {errors.root?.server?.message && (
             <p className="auth-error" role="alert">{errors.root.server.message}</p>
           )}

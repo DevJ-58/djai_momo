@@ -5,6 +5,7 @@ import { Check, Clipboard, Copy, Send } from 'lucide-react';
 import { Badge, Button, Modal } from '../ui';
 import { formatAmount, formatDate, formatRelative } from '../../lib/format';
 import { useRegistrationHistory } from '../../hooks/useRegistrationHistory';
+import { useRegistrationAudit } from '../../hooks/useAuditLog';
 import { useUnmarkExported } from '../../hooks/useRegistrationExports';
 import { useSetRegistrationStatus } from '../../hooks/useSetRegistrationStatus';
 import { useUpdateRegistrationInfo } from '../../hooks/useUpdateRegistrationInfo';
@@ -19,6 +20,11 @@ import {
 import { useAbidjanToday } from '../../hooks/useAbidjanToday';
 import { correctionRequestSchema, type CorrectionRequestValues } from '../../lib/correction-validation';
 import { formatDailyNumber } from '../../lib/registration-days';
+import { registrationAmountText, registrationStatusLabel } from '../../lib/registration-status';
+import { useRegistrationReceiverResult } from '../../hooks/useRegistrations';
+import { parseIdentifier } from '../../lib/parseIdentifier';
+import { formatNumeroForDisplay, parseNumero } from '../../lib/numero';
+import { formatDescriptionChange, hasDescription, parseDescription } from '../../lib/description';
 import type { CorrectionRequest, RegistrationListItem, RegistrationStatus, RegistrationWithAgent } from '../../types/database';
 
 export type RegistrationDisplayItem = RegistrationListItem & {
@@ -66,12 +72,15 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
             <div className="registration-card-topline">
               <span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span>
               <span className="registration-card-status">
-                <Badge status={registration.status} />
+                <Badge status={registration.status} amount={registration.amount} />
                 {showExportStatus && registration.exported_at && <ExportedBadge />}
                 {showCorrectionStatus && correctionRequestedIds?.has(registration.id) && <CorrectionRequestedBadge />}
               </span>
             </div>
             <strong className="registration-card-email">{registration.email}</strong>
+              {registration.numero !== null && (
+                <span className="registration-card-numero">Numéro · {formatNumeroForDisplay(registration.numero)}</span>
+              )}
             {showAgent && registration.profiles?.full_name && (
               <span className="registration-agent-name">{registration.profiles.full_name}</span>
             )}
@@ -84,11 +93,50 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
       </div>
 
       <div className="registration-table-wrap glass">
+        {items.some((registration) => registration.numero !== null) && (
+          <table className="registration-table">
+            <thead>
+              <tr>
+                {showAgent && <th>Utilisateur</th>}
+                <th>N°</th><th>Identifiant</th><th>Numéro</th><th>Statut</th><th>Montant</th><th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((registration) => (
+                <tr
+                  key={registration.id}
+                  tabIndex={0}
+                  aria-label={`Enregistré ${formatDailyNumber(registration.day_seq, registration.send_day, today)}, ${registration.email}`}
+                  onClick={() => open(registration)}
+                  onKeyDown={(event: KeyboardEvent<HTMLTableRowElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      open(registration);
+                    }
+                  }}
+                >
+                  {showAgent && <td>{registration.profiles?.full_name ?? '—'}</td>}
+                  <td><span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span></td>
+                  <td className="registration-table-email">{registration.email}</td>
+                  <td>{registration.numero === null ? '' : formatNumeroForDisplay(registration.numero)}</td>
+                  <td>
+                    <Badge status={registration.status} amount={registration.amount} />
+                    {showExportStatus && registration.exported_at && <ExportedBadge />}
+                    {showCorrectionStatus && correctionRequestedIds?.has(registration.id) && <CorrectionRequestedBadge />}
+                  </td>
+                  <td>{registration.amount === null ? '—' : formatAmount(registration.amount)}</td>
+                  <td><time dateTime={registration.created_at}>{formatDate(registration.created_at)}</time></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {!items.some((registration) => registration.numero !== null) && (
         <table className="registration-table">
           <thead>
             <tr>
               {showAgent && <th>Utilisateur</th>}
-              <th>N°</th><th>Email</th><th>Statut</th><th>Montant</th><th>Date</th>
+              <th>N°</th><th>Identifiant</th><th>Statut</th><th>Montant</th><th>Date</th>
             </tr>
           </thead>
           <tbody>
@@ -109,7 +157,7 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
                 <td><span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span></td>
                 <td className="registration-table-email">{registration.email}</td>
                 <td>
-                  <Badge status={registration.status} />
+                  <Badge status={registration.status} amount={registration.amount} />
                   {showExportStatus && registration.exported_at && <ExportedBadge />}
                   {showCorrectionStatus && correctionRequestedIds?.has(registration.id) && <CorrectionRequestedBadge />}
                 </td>
@@ -119,6 +167,7 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {selected && (
@@ -138,60 +187,110 @@ export function RegistrationRecordList<T extends RegistrationDisplayItem>({
 export function RegistrationDetails({
   registration,
   onClose,
+  loading = false,
   allowStatusChange = false,
   showExportStatus = false,
   showCorrectionStatus = false,
+  allowAgentCorrectionRequests = true,
   show,
 }: {
   registration: RegistrationListItem | RegistrationWithAgent | null;
   onClose: () => void;
+  loading?: boolean;
   allowStatusChange?: boolean;
   showExportStatus?: boolean;
   showCorrectionStatus?: boolean;
+  allowAgentCorrectionRequests?: boolean;
   show?: (message: string, tone?: 'success' | 'error' | 'info') => void;
 }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [copied, setCopied] = useState<'email' | 'password' | null>(null);
+  const [copied, setCopied] = useState<'email' | 'password' | 'numero' | null>(null);
   const [currentStatus, setCurrentStatus] = useState(registration?.status ?? 'en_attente');
   const [currentAmount, setCurrentAmount] = useState(registration?.amount ?? null);
   const [currentExportedAt, setCurrentExportedAt] = useState(registration?.exported_at ?? null);
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [emailInput, setEmailInput] = useState(registration?.email ?? '');
+  const [descriptionInput, setDescriptionInput] = useState(registration?.description ?? '');
+  const [currentDescription, setCurrentDescription] = useState(registration?.description ?? null);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
+  const [numeroInput, setNumeroInput] = useState(registration?.numero ?? '');
+  const [currentNumero, setCurrentNumero] = useState(registration?.numero ?? null);
+  const [numeroError, setNumeroError] = useState<string | null>(null);
+  const [resetExportOnSave, setResetExportOnSave] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [identifierError, setIdentifierError] = useState<string | null>(null);
   const updateInfo = useUpdateRegistrationInfo();
   const deleteRegistrations = useDeleteRegistrations();
   const unmarkExported = useUnmarkExported();
   const online = useOnlineStatus();
   const { role, profile } = useAuth();
   const today = useAbidjanToday();
-  const correctionRequests = useRegistrationCorrectionRequests(registration?.id ?? '');
+  const correctionRequests = useRegistrationCorrectionRequests(
+    registration?.id ?? '',
+    role !== 'agent' || allowAgentCorrectionRequests,
+  );
   const correctionRequest = useCreateCorrectionRequest();
   const handleCorrection = useHandleCorrectionRequest();
+  const receiverResult = useRegistrationReceiverResult(registration?.id ?? '');
   const openCorrection = correctionRequests.data?.find((request) => request.status === 'ouverte');
 
   useEffect(() => {
     setPasswordVisible(false);
     setCopied(null);
-    setCurrentStatus(registration?.status ?? 'en_attente');
-    setCurrentAmount(registration?.amount ?? null);
     setCurrentExportedAt(registration?.exported_at ?? null);
     setCorrectionModalOpen(false);
     setEditMode(false);
     setEmailInput(registration?.email ?? '');
+    setDescriptionInput(registration?.description ?? '');
+    setCurrentDescription(registration?.description ?? null);
+    setDescriptionError(null);
+    setNumeroInput(registration?.numero ?? '');
+    setCurrentNumero(registration?.numero ?? null);
+    setNumeroError(null);
+    setResetExportOnSave(false);
+    setIdentifierError(null);
     setPasswordInput('');
     setFormError(null);
   }, [registration?.id]);
 
+  useEffect(() => {
+    setCurrentStatus(registration?.status ?? 'en_attente');
+    setCurrentAmount(registration?.amount ?? null);
+  }, [registration?.id, registration?.status, registration?.amount]);
+
   const saveAdminUpdate = async () => {
     if (!registration || role !== 'admin') return;
-    const trimmedEmail = emailInput.trim();
+    const parsedIdentifier = parseIdentifier(emailInput);
+    if (!parsedIdentifier.success) {
+      setIdentifierError(parsedIdentifier.error);
+      return;
+    }
     const trimmedPassword = passwordInput.trim();
-    const payload: { email?: string; mdp?: string } = {};
+    let parsedNumero: string | null;
+    try {
+      parsedNumero = parseNumero(numeroInput);
+      setNumeroError(null);
+    } catch (error) {
+      setNumeroError(error instanceof Error ? error.message : 'Numéro invalide : chiffres uniquement, 4 à 20.');
+      return;
+    }
+    let parsedDescription: string | null;
+    try {
+      parsedDescription = parseDescription(descriptionInput);
+      setDescriptionError(null);
+    } catch (error) {
+      setDescriptionError(error instanceof Error ? error.message : '300 caractères maximum.');
+      return;
+    }
+    const payload: { email?: string; mdp?: string; numero?: string | null; description?: string | null; exported_at?: string | null } = {};
 
-    if (trimmedEmail && trimmedEmail !== registration.email) payload.email = trimmedEmail;
+    if (parsedIdentifier.value !== registration.email) payload.email = parsedIdentifier.value;
     if (trimmedPassword) payload.mdp = trimmedPassword;
+    if (parsedNumero !== currentNumero) payload.numero = parsedNumero;
+    if (parsedDescription !== currentDescription) payload.description = parsedDescription;
+    if (resetExportOnSave && currentExportedAt) payload.exported_at = null;
 
     if (Object.keys(payload).length === 0) {
       setFormError('Aucune modification à enregistrer.');
@@ -202,8 +301,16 @@ export function RegistrationDetails({
       setFormError(null);
       await updateInfo.mutateAsync({ registrationId: registration.id, values: payload });
       setEditMode(false);
-      setEmailInput(trimmedEmail || registration.email);
+      setEmailInput(parsedIdentifier.value);
+      setNumeroInput(parsedNumero ?? '');
+      setCurrentNumero(parsedNumero);
+      setDescriptionInput(parsedDescription ?? '');
+      setCurrentDescription(parsedDescription);
+      if (payload.exported_at === null) setCurrentExportedAt(null);
+      setIdentifierError(null);
+      setNumeroError(null);
       setPasswordInput('');
+      setResetExportOnSave(false);
       show?.('Informations mises à jour.', 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.';
@@ -214,7 +321,10 @@ export function RegistrationDetails({
 
   const deleteSingleRegistration = async () => {
     if (!registration || role !== 'admin') return;
-    if (!window.confirm('Supprimer cet enregistrement ?')) return;
+    const numeroPreview = currentNumero === null
+      ? ''
+      : `\nNuméro : ${formatNumeroForDisplay(currentNumero)}`;
+    if (!window.confirm(`Supprimer cet enregistrement ?${numeroPreview}`)) return;
 
     try {
       await deleteRegistrations.mutateAsync([registration.id]);
@@ -226,11 +336,11 @@ export function RegistrationDetails({
     }
   };
 
-  const copyValue = async (value: string, type: 'email' | 'password') => {
+  const copyValue = async (value: string, type: 'email' | 'password' | 'numero') => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(type);
-      show?.(type === 'email' ? 'E-mail copié.' : 'Mot de passe copié.', 'success');
+      show?.(type === 'email' ? 'Identifiant copié.' : type === 'numero' ? 'Numéro copié.' : 'Mot de passe copié.', 'success');
     } catch {
       show?.('Impossible de copier. Vérifiez les autorisations du navigateur.', 'error');
     }
@@ -239,18 +349,22 @@ export function RegistrationDetails({
   return (
     <>
       <Modal
-        open={Boolean(registration) && !correctionModalOpen}
+        open={(Boolean(registration) || loading) && !correctionModalOpen}
         title="Détail de l’enregistrement"
         onClose={onClose}
         className="registration-detail-modal"
-        backdropClassName="registration-detail-backdrop"
+        backdropClassName="registration-detail-backdrop registration-details-backdrop"
       >
-        {registration && (
+        {loading && !registration ? (
+          <p role="status">
+            {online ? 'Chargement de l’enregistrement…' : 'Hors ligne : reconnectez-vous pour charger l’enregistrement.'}
+          </p>
+        ) : registration && (
           <div className="registration-detail-content">
             <div className="registration-detail-row">
               <span className="registration-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span>
               <span className="registration-card-status">
-                <Badge status={currentStatus} />
+                <Badge status={currentStatus} amount={currentAmount} />
                 {showExportStatus && currentExportedAt && <ExportedBadge />}
                 {showCorrectionStatus && openCorrection && <CorrectionRequestedBadge />}
               </span>
@@ -262,14 +376,24 @@ export function RegistrationDetails({
             )}
             {role === 'admin' && editMode ? (
               <>
-                <DetailField label="E-mail">
+                <DetailField label="Identifiant">
                   <input
                     className="input registration-edit-input"
-                    type="email"
+                    type="text"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoComplete="off"
                     value={emailInput}
-                    onChange={(event) => setEmailInput(event.target.value)}
-                    aria-label="Modifier l’e-mail"
+                    onChange={(event) => {
+                      setEmailInput(event.target.value);
+                      setIdentifierError(null);
+                    }}
+                    aria-label="Modifier l’identifiant"
+                    aria-invalid={Boolean(identifierError)}
                   />
+                  {identifierError && <span className="registration-form-error">{identifierError}</span>}
                 </DetailField>
                 <DetailField label="Mot de passe">
                   <input
@@ -281,15 +405,73 @@ export function RegistrationDetails({
                     aria-label="Nouveau mot de passe"
                   />
                 </DetailField>
+                <DetailField label="Numéro (facultatif)">
+                  <input
+                    className="input registration-edit-input"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="off"
+                    placeholder="07 00 00 00 00"
+                    value={numeroInput}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setNumeroInput(value);
+                      setNumeroError(null);
+                      let nextNumero: string | null;
+                      try {
+                        nextNumero = parseNumero(value);
+                      } catch {
+                        nextNumero = value.trim();
+                      }
+                      setResetExportOnSave(Boolean(currentExportedAt) && nextNumero !== currentNumero);
+                    }}
+                    aria-label="Modifier le numéro"
+                    aria-invalid={Boolean(numeroError)}
+                  />
+                  {numeroError && <span className="registration-form-error">{numeroError}</span>}
+                </DetailField>
+                <DetailField label="Description (facultatif)">
+                  <textarea
+                    className="input registration-description-input"
+                    rows={3}
+                    maxLength={300}
+                    autoComplete="off"
+                    spellCheck
+                    value={descriptionInput}
+                    onChange={(event) => {
+                      setDescriptionInput(event.target.value);
+                      setDescriptionError(null);
+                    }}
+                    aria-label="Description (facultatif)"
+                    aria-invalid={Boolean(descriptionError)}
+                    aria-describedby="edit-description-error edit-description-count"
+                  />
+                  {descriptionError && (
+                    <span id="edit-description-error" className="registration-form-error" role="alert">
+                      {descriptionError}
+                    </span>
+                  )}
+                  <span id="edit-description-count" className="registration-note-count">{descriptionInput.length}/300</span>
+                </DetailField>
+                {currentExportedAt && (
+                  <label className="registration-reset-export-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={resetExportOnSave}
+                      onChange={(event) => setResetExportOnSave(event.target.checked)}
+                    />
+                    <span>Remettre en non envoyé pour le renvoyer</span>
+                  </label>
+                )}
               </>
             ) : (
               <>
-                <DetailField label="E-mail">
+                <DetailField label="Identifiant">
                   <span className="registration-detail-value">{registration.email}</span>
                   <Button
                     className="copy-field-button"
                     variant="ghost"
-                    aria-label="Copier l’e-mail"
+                    aria-label="Copier l’identifiant"
                     onClick={() => void copyValue(registration.email, 'email')}
                   >
                     {copied === 'email' ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
@@ -321,6 +503,29 @@ export function RegistrationDetails({
                     </Button>
                   </div>
                 </DetailField>
+                {currentNumero !== null && (
+                  <DetailField label="Numéro">
+                    <span className="registration-detail-value registration-password-value">
+                      {formatNumeroForDisplay(currentNumero)}
+                    </span>
+                    {role === 'admin' && (
+                      <Button
+                        className="copy-field-button"
+                        variant="ghost"
+                        aria-label="Copier le numéro"
+                        onClick={() => void copyValue(currentNumero, 'numero')}
+                      >
+                        {copied === 'numero' ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
+                        <span>{copied === 'numero' ? 'Copié' : 'Copier'}</span>
+                      </Button>
+                    )}
+                  </DetailField>
+                )}
+                {hasDescription(currentDescription) && (
+                  <DetailField label="Description">
+                    <p className="registration-description-text">{currentDescription}</p>
+                  </DetailField>
+                )}
               </>
             )}
             <DetailField label="Montant">
@@ -328,6 +533,11 @@ export function RegistrationDetails({
                 {currentAmount === null ? '—' : formatAmount(currentAmount)}
               </span>
             </DetailField>
+            {currentStatus === 'gagne' && (
+              <p className="registration-awaiting-confirmation">
+                À confirmer par l’administrateur.
+              </p>
+            )}
             <DetailField label="Date d’enregistrement">
               <time className="registration-detail-value" dateTime={registration.created_at}>
                 {formatDate(registration.created_at)}
@@ -365,7 +575,16 @@ export function RegistrationDetails({
                 </time>
               </DetailField>
             )}
-            {role === 'agent' && (
+            <ReceiverResultSection
+              result={receiverResult.data}
+              registrationStatus={currentStatus}
+              registrationAmount={currentAmount}
+              offline={!online}
+              loading={receiverResult.isPending}
+              error={receiverResult.isError ? receiverResult.error.message : null}
+              onRetry={() => void receiverResult.refetch()}
+            />
+            {role === 'agent' && allowAgentCorrectionRequests && (
               <CorrectionRequestSection
                 requests={correctionRequests.data ?? []}
                 loading={correctionRequests.isPending}
@@ -403,7 +622,18 @@ export function RegistrationDetails({
                   </Button>
                 ) : (
                   <div className="admin-confirm-actions">
-                    <Button type="button" variant="secondary" onClick={() => { setEditMode(false); setFormError(null); setPasswordInput(''); setEmailInput(registration.email); }} disabled={updateInfo.isPending}>
+                    <Button type="button" variant="secondary" onClick={() => {
+                      setEditMode(false);
+                      setFormError(null);
+                      setIdentifierError(null);
+                      setNumeroError(null);
+                      setPasswordInput('');
+                      setEmailInput(registration.email);
+                      setNumeroInput(currentNumero ?? '');
+                      setDescriptionInput(currentDescription ?? '');
+                      setDescriptionError(null);
+                      setResetExportOnSave(false);
+                    }} disabled={updateInfo.isPending}>
                       Annuler
                     </Button>
                     <Button variant="primary" loading={updateInfo.isPending} disabled={!online || updateInfo.isPending} onClick={() => void saveAdminUpdate()}>
@@ -431,7 +661,7 @@ export function RegistrationDetails({
         )}
       </Modal>
       <CorrectionRequestModal
-        open={Boolean(registration) && correctionModalOpen}
+        open={allowAgentCorrectionRequests && Boolean(registration) && correctionModalOpen}
         onClose={() => setCorrectionModalOpen(false)}
         onSent={() => {
           setCorrectionModalOpen(false);
@@ -450,6 +680,55 @@ export function RegistrationDetails({
 
 function CorrectionRequestedBadge() {
   return <span className="correction-requested-badge">Correction demandée</span>;
+}
+
+function ReceiverResultSection({
+  result,
+  registrationStatus,
+  registrationAmount,
+  offline,
+  loading,
+  error,
+  onRetry,
+}: {
+  result: { result: 'gagne' | 'echec' | 'renonce' | null; amount: number | null; note: string | null; recordedAt: string | null } | null | undefined;
+  registrationStatus: RegistrationStatus;
+  registrationAmount: number | null;
+  offline: boolean;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  return (
+    <section className="receiver-result-section" aria-labelledby="receiver-result-title">
+      <h3 id="receiver-result-title">Résultat du receveur</h3>
+      {loading ? (
+        <p role="status">
+          {offline ? 'Hors ligne : reconnectez-vous pour charger le résultat.' : 'Chargement du résultat…'}
+        </p>
+      ) : error ? (
+        <div className="registration-history-error" role="alert">
+          <span>{error}</span><Button variant="ghost" onClick={onRetry}>Réessayer</Button>
+        </div>
+      ) : result?.result ? (
+        <div className="receiver-result-content">
+          <Badge
+            status={result.result}
+            amount={result.result === 'gagne' && registrationStatus === 'gagne' ? registrationAmount : null}
+          />
+          {result.result === 'gagne' && result.amount !== null && (
+            <span>Montant du résultat : {formatAmount(result.amount)}</span>
+          )}
+          {result.note && <p>{result.note}</p>}
+          {result.recordedAt && (
+            <time dateTime={result.recordedAt}>{formatDate(result.recordedAt)}</time>
+          )}
+        </div>
+      ) : (
+        <p className="registration-history-empty">Aucun résultat enregistré.</p>
+      )}
+    </section>
+  );
 }
 
 function CorrectionRequestSection({
@@ -526,8 +805,7 @@ function AdminCorrectionSection({
   onRetry: () => void;
   onHandle: (requestId: string) => Promise<void>;
 }) {
-  const openRequest = requests.find((request) => request.status === 'ouverte');
-  if (!loading && !error && !openRequest) return null;
+  if (!loading && !error && requests.length === 0) return null;
 
   return (
     <section className="correction-request-section" aria-labelledby="admin-correction-title">
@@ -538,22 +816,33 @@ function AdminCorrectionSection({
         <div className="registration-history-error" role="alert">
           <span>{error}</span><Button variant="ghost" onClick={onRetry}>Réessayer</Button>
         </div>
-      ) : openRequest ? (
-        <article className="correction-request-item">
-          <p>{openRequest.message}</p>
+      ) : requests.map((request) => (
+        <article className="correction-request-item" key={request.id}>
+          <p>{request.message}</p>
           <span>{'profiles' in registration ? registration.profiles?.full_name ?? 'Utilisateur' : 'Utilisateur'}</span>
-          <time dateTime={openRequest.created_at}>{formatDate(openRequest.created_at)}</time>
-          <Button
-            variant="primary"
-            loading={pending}
-            disabled={!online || pending}
-            onClick={() => void onHandle(openRequest.id)}
-          >
-            Marquer comme traitée
-          </Button>
-          {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour traiter cette demande.</p>}
+          <span className={`correction-status correction-status-${request.status}`}>
+            {request.status === 'ouverte' ? 'Correction demandée' : 'Correction traitée'}
+          </span>
+          <time dateTime={request.status === 'traitee' ? request.handled_at ?? request.created_at : request.created_at}>
+            {request.status === 'traitee' && request.handled_at
+              ? `Traitée le ${formatDate(request.handled_at)}`
+              : `Demandée le ${formatDate(request.created_at)}`}
+          </time>
+          {request.status === 'ouverte' && (
+            <>
+              <Button
+                variant="primary"
+                loading={pending}
+                disabled={!online || pending}
+                onClick={() => void onHandle(request.id)}
+              >
+                Marquer comme traitée
+              </Button>
+              {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour traiter cette demande.</p>}
+            </>
+          )}
         </article>
-      ) : null}
+      ))}
     </section>
   );
 }
@@ -654,10 +943,13 @@ const editableStatuses: Array<{ value: RegistrationStatus; label: string }> = [
   { value: 'paye', label: 'Payé' },
   { value: 'refuse', label: 'Refusé' },
   { value: 'probleme', label: 'Problème' },
+  { value: 'gagne', label: 'Gagné' },
+  { value: 'echec', label: 'Échec' },
+  { value: 'renonce', label: 'Renoncé' },
 ];
 
 function statusLabel(status: RegistrationStatus | null) {
-  return editableStatuses.find((item) => item.value === status)?.label ?? '—';
+  return registrationStatusLabel(status);
 }
 
 function StatusManagement({
@@ -670,12 +962,13 @@ function StatusManagement({
   show?: (message: string, tone?: 'success' | 'error' | 'info') => void;
 }) {
   const history = useRegistrationHistory(registration.id);
+  const audit = useRegistrationAudit(registration.id);
   const updateStatus = useSetRegistrationStatus();
   const online = useOnlineStatus();
   const [savedStatus, setSavedStatus] = useState(registration.status);
   const [savedAmount, setSavedAmount] = useState(registration.amount);
   const [newStatus, setNewStatus] = useState(registration.status);
-  const [amountText, setAmountText] = useState(registration.amount === null ? '' : String(registration.amount));
+  const [amountText, setAmountText] = useState(registrationAmountText(registration.status, registration.amount) || (registration.amount === null ? '' : String(registration.amount)));
   const [note, setNote] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -683,18 +976,65 @@ function StatusManagement({
     setSavedStatus(registration.status);
     setSavedAmount(registration.amount);
     setNewStatus(registration.status);
-    setAmountText(registration.amount === null ? '' : String(registration.amount));
+    setAmountText(registrationAmountText(registration.status, registration.amount) || (registration.amount === null ? '' : String(registration.amount)));
     setNote('');
     setErrorMessage(null);
-  }, [registration.id]);
+  }, [registration.id, registration.status, registration.amount]);
 
-  const requiresAmount = newStatus === 'paye' &&
-    (savedAmount === null || newStatus !== savedStatus);
+  const amountStatus = newStatus === 'paye' || newStatus === 'gagne';
+  const showAmount = newStatus === 'gagne' ||
+    (newStatus === 'paye' && (savedAmount === null || newStatus !== savedStatus));
   const amount = amountText.trim() === '' ? null : Number(amountText);
   const validAmount = amount !== null && Number.isSafeInteger(amount) && amount > 0;
-  const missingAmount = newStatus === 'paye' && !validAmount;
+  const missingAmount = amountStatus && !validAmount;
   const changed = newStatus !== savedStatus ||
-    (newStatus === 'paye' && amount !== savedAmount);
+    (amountStatus && amount !== savedAmount);
+  const journalAudit = (audit.data ?? []).flatMap((entry) => {
+    const change = formatDescriptionChange(entry.changes);
+    const changes = entry.changes;
+    const hasNumero = typeof changes === 'object' && changes !== null && 'numero' in changes;
+    const numeroChange = hasNumero ? changes.numero : undefined;
+    let numeroText: string | null = null;
+    if (entry.action === 'update' && typeof numeroChange === 'object' && numeroChange !== null) {
+      const from = 'de' in numeroChange && typeof numeroChange.de === 'string'
+        ? formatNumeroForDisplay(numeroChange.de)
+        : '';
+      const to = 'vers' in numeroChange && typeof numeroChange.vers === 'string'
+        ? formatNumeroForDisplay(numeroChange.vers)
+        : '';
+      numeroText = `Numéro : ${from} -> ${to}`;
+    } else if (entry.action === 'delete' && typeof numeroChange === 'string' && numeroChange !== '') {
+      numeroText = `Numéro : ${formatNumeroForDisplay(numeroChange)}`;
+    }
+    return [
+      ...(change ? [{ entry, key: `${entry.id}-description`, text: change.text, title: change.title }] : []),
+      ...(numeroText ? [{ entry, key: `${entry.id}-numero`, text: numeroText, title: undefined }] : []),
+    ];
+  });
+
+  const confirmPayment = async () => {
+    const paymentAmount = registration.amount;
+    if (paymentAmount === null || paymentAmount <= 0 || !online || updateStatus.isPending) return;
+    setErrorMessage(null);
+    try {
+      await updateStatus.mutateAsync({
+        registrationId: registration.id,
+        newStatus: 'paye',
+        amount: paymentAmount,
+        note: null,
+      });
+      setSavedStatus('paye');
+      setSavedAmount(paymentAmount);
+      setNewStatus('paye');
+      setAmountText(String(paymentAmount));
+      onSaved('paye', paymentAmount);
+      show?.('Paiement confirmé', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.';
+      setErrorMessage(message);
+      show?.(message, 'error');
+    }
+  };
 
   const confirmChange = async () => {
     if (!changed || missingAmount) return;
@@ -703,14 +1043,14 @@ function StatusManagement({
       await updateStatus.mutateAsync({
         registrationId: registration.id,
         newStatus,
-        amount: newStatus === 'paye' ? amount : null,
+        amount: amountStatus ? amount : null,
         note: note.trim() || null,
       });
       setSavedStatus(newStatus);
-      const updatedAmount = newStatus === 'paye' ? amount : null;
+      const updatedAmount = amountStatus ? amount : null;
       setSavedAmount(updatedAmount);
       onSaved(newStatus, updatedAmount);
-      if (newStatus !== 'paye') setAmountText('');
+      if (!amountStatus) setAmountText('');
       setNote('');
       show?.('Statut mis à jour', 'success');
     } catch (error) {
@@ -734,7 +1074,7 @@ function StatusManagement({
           {editableStatuses.map(({ value, label }) => <option value={value} key={value}>{label}</option>)}
         </select>
       </label>
-      {requiresAmount && (
+      {showAmount && (
         <label className="registration-management-field">
           <span className="field-label">Montant (FCFA)</span>
           <input
@@ -750,7 +1090,7 @@ function StatusManagement({
           />
           {missingAmount && (
             <span className="registration-form-error">
-              Un enregistré « Payé » doit avoir un montant supérieur à 0.
+              Le montant doit être supérieur à 0.
             </span>
           )}
         </label>
@@ -776,6 +1116,16 @@ function StatusManagement({
       >
         Confirmer le changement
       </Button>
+      {registration.status === 'gagne' && (
+        <Button
+          className="registration-confirm-payment"
+          loading={updateStatus.isPending}
+          disabled={!online || updateStatus.isPending || registration.amount === null || registration.amount <= 0}
+          onClick={() => void confirmPayment()}
+        >
+          Confirmer le paiement ({formatAmount(registration.amount ?? 0)})
+        </Button>
+      )}
       {!online && <p className="auth-error" role="status">Reconnectez-vous à Internet pour modifier le statut.</p>}
 
       <section className="registration-history" aria-labelledby="registration-history-title">
@@ -799,6 +1149,28 @@ function StatusManagement({
                 {entry.amount !== null && <span>Montant : {formatAmount(entry.amount)}</span>}
                 {entry.note && <p>{entry.note}</p>}
                 <span>{entry.changed_by_name ?? '—'}</span>
+                <time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+      <section className="registration-history" aria-labelledby="registration-journal-title">
+        <h3 id="registration-journal-title">Journal</h3>
+        {audit.isPending ? (
+          <p role="status">Chargement du journal…</p>
+        ) : audit.isError ? (
+          <div className="registration-history-error" role="alert">
+            <span>{audit.error.message}</span>
+            <Button variant="ghost" onClick={() => void audit.refetch()}>Réessayer</Button>
+          </div>
+        ) : journalAudit.length === 0 ? (
+          <p className="registration-history-empty">Aucune modification enregistrée.</p>
+        ) : (
+          <ol className="registration-history-list">
+            {journalAudit.map(({ entry, key, text, title }) => (
+              <li className="registration-history-entry" key={key}>
+                <strong title={title}>{text}</strong>
                 <time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
               </li>
             ))}

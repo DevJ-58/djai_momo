@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Activity,
   ArrowLeft,
   Check,
   Clock3,
+  CircleDollarSign,
   Eye,
   FileDown,
   Inbox,
@@ -17,11 +18,12 @@ import {
   UsersRound,
   Wallet,
 } from 'lucide-react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DeleteUserModal } from '../components/admin/DeleteUserModal';
 import { ToastViewport } from '../components/layout/ToastViewport';
-import { RegistrationRecordList } from '../components/registrations/RegistrationRecordList';
+import { RegistrationDetails, RegistrationRecordList } from '../components/registrations/RegistrationRecordList';
 import { ExportPdfModal } from '../components/exports/ExportPdfModal';
+import { ExportCsvModal } from '../components/exports/ExportCsvModal';
 import { WhatsAppExportModal } from '../components/exports/WhatsAppExportModal';
 import {
   Avatar,
@@ -41,12 +43,14 @@ import {
   useAgentProfile,
   useAgentRegistrations,
   useAdminRegistrations,
+  useAdminRegistrationById,
   useAgentExportCounts,
   useAgentsOverview,
   useDailyRegistrations,
   useRecentRegistrations,
   useToggleSuspension,
   useUpdateAgentWhatsapp,
+  useUnconfirmedReceiverResults,
 } from '../hooks/useAdmin';
 import { useAuth } from '../hooks/useAuth';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
@@ -55,17 +59,23 @@ import { formatAmount, formatDate, formatRelative, toTitleCase } from '../lib/fo
 import type { AgentOverview, DailyPoint, RegistrationStatus, RegistrationWithAgent } from '../types/database';
 import { generateAgentsSummaryPdf } from '../lib/exports/pdf';
 import { formatDailyNumber } from '../lib/registration-days';
+import { formatNumeroForDisplay } from '../lib/numero';
+import { getRegistrationDetailId, updateRegistrationDetailParam } from '../lib/registration-detail-route';
 
 const statusItems: Array<{ status: RegistrationStatus; label: string }> = [
   { status: 'en_attente', label: 'En attente' },
   { status: 'paye', label: 'Payés' },
   { status: 'refuse', label: 'Refusés' },
   { status: 'probleme', label: 'Problèmes' },
+  { status: 'gagne', label: 'Gagné' },
+  { status: 'echec', label: 'Échec' },
+  { status: 'renonce', label: 'Renoncé' },
 ];
 
 export function AdminDashboardPage() {
   const { profile } = useAuth();
   const stats = useAdminStats();
+  const unconfirmedResults = useUnconfirmedReceiverResults();
   const agents = useAgentsOverview();
   const daily = useDailyRegistrations(14);
   const recent = useRecentRegistrations();
@@ -73,7 +83,7 @@ export function AdminDashboardPage() {
   const [activeDay, setActiveDay] = useState<number | null>(null);
 
   const refresh = () => {
-    void Promise.all([stats.refetch(), agents.refetch(), daily.refetch(), recent.refetch()]);
+    void Promise.all([stats.refetch(), unconfirmedResults.refetch(), agents.refetch(), daily.refetch(), recent.refetch()]);
   };
   const topAgents = [...(agents.data ?? [])]
     .sort((first, second) => second.total - first.total)
@@ -91,7 +101,7 @@ export function AdminDashboardPage() {
           variant="ghost"
           className="refresh-button"
           onClick={refresh}
-          disabled={stats.isFetching || agents.isFetching || daily.isFetching || recent.isFetching}
+          disabled={stats.isFetching || unconfirmedResults.isFetching || agents.isFetching || daily.isFetching || recent.isFetching}
           aria-label="Actualiser le tableau de bord"
           title="Actualiser"
         >
@@ -138,6 +148,20 @@ export function AdminDashboardPage() {
           </>
         )}
       </section>
+      <Card className="admin-unconfirmed-summary">
+        {unconfirmedResults.isPending ? (
+          <span role="status">Chargement des gains à confirmer…</span>
+        ) : unconfirmedResults.isError ? (
+          <span role="alert">Impossible de charger les gains à confirmer.</span>
+        ) : (
+          <>
+            <CircleDollarSign size={19} aria-hidden="true" />
+            <span>
+              Gagnés à confirmer : {unconfirmedResults.data.count} · {formatAmount(unconfirmedResults.data.totalAmount)}
+            </span>
+          </>
+        )}
+      </Card>
 
       {stats.data && (
         <StatusDistribution
@@ -147,6 +171,9 @@ export function AdminDashboardPage() {
             paye: stats.data.payes,
             refuse: stats.data.refuses,
             probleme: stats.data.problemes,
+            gagne: unconfirmedResults.data?.count ?? 0,
+            echec: unconfirmedResults.data?.echec ?? 0,
+            renonce: unconfirmedResults.data?.renonce ?? 0,
           }}
         />
       )}
@@ -237,9 +264,12 @@ export function AdminDashboardPage() {
                       {registration.profiles?.full_name ? toTitleCase(registration.profiles.full_name) : 'Utilisateur'}
                     </Link>
                     <span className="admin-recent-number">{formatDailyNumber(registration.day_seq, registration.send_day, today)}</span>
+                    {registration.numero !== null && (
+                      <span className="admin-recent-numero">Numéro · {formatNumeroForDisplay(registration.numero)}</span>
+                    )}
                   </div>
                   <div className="admin-recent-meta">
-                    <Badge status={registration.status} />
+                    <Badge status={registration.status} amount={registration.amount} />
                     <time dateTime={registration.created_at}>{formatRelative(registration.created_at)}</time>
                   </div>
                 </div>
@@ -793,6 +823,7 @@ export function AdminAgentDetailPage() {
   const [confirmTarget, setConfirmTarget] = useState<AgentOverview | null>(null);
   const [deleteAgent, setDeleteAgent] = useState<AgentOverview | null>(null);
   const [exportPdfOpen, setExportPdfOpen] = useState(false);
+  const [exportCsvOpen, setExportCsvOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [editWhatsappOpen, setEditWhatsappOpen] = useState(false);
   const [whatsappValue, setWhatsappValue] = useState('');
@@ -898,6 +929,9 @@ export function AdminAgentDetailPage() {
           <Button variant="secondary" onClick={() => setExportPdfOpen(true)}>
             <FileDown size={17} aria-hidden="true" /> Exporter en PDF
           </Button>
+          <Button variant="secondary" onClick={() => setExportCsvOpen(true)}>
+            <FileDown size={17} aria-hidden="true" /> Exporter en CSV
+          </Button>
           <Button variant="secondary" onClick={() => setWhatsappOpen(true)}>
             <Send size={17} aria-hidden="true" /> Envoyer sur WhatsApp
             <span className="export-count-badge">{exportCounts.data?.[id] ?? 0}</span>
@@ -931,11 +965,11 @@ export function AdminAgentDetailPage() {
         <div className="registration-filters">
           <Input
             className="registration-search"
-            label="Rechercher par e-mail"
+            label="Rechercher par identifiant ou numéro"
             type="search"
             inputMode="email"
             autoComplete="off"
-            placeholder="Saisissez un e-mail"
+            placeholder="Identifiant ou numéro"
             icon={<Search size={18} aria-hidden="true" />}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -1021,6 +1055,12 @@ export function AdminAgentDetailPage() {
         filtersLabel={`Utilisateur : ${toTitleCase(profile.data.full_name)}`}
         agentName={toTitleCase(profile.data.full_name)}
       />
+      <ExportCsvModal
+        open={exportCsvOpen}
+        onClose={() => setExportCsvOpen(false)}
+        filters={agentPdfFilters}
+        agentName={toTitleCase(profile.data.full_name)}
+      />
       <WhatsAppExportModal open={whatsappOpen} agent={accountOverview} onClose={() => setWhatsappOpen(false)} />
       <Modal open={editWhatsappOpen} title="Modifier le numéro WhatsApp" onClose={() => setEditWhatsappOpen(false)}>
         <form className="admin-whatsapp-form" onSubmit={(event) => void saveWhatsapp(event)} noValidate>
@@ -1063,8 +1103,14 @@ export function AdminRegistrationsPlaceholderPage() {
   const [dateTo, setDateTo] = useState('');
   const [exported, setExported] = useState<'all' | 'exported' | 'not_exported'>('all');
   const [exportPdfOpen, setExportPdfOpen] = useState(false);
-  const [selected, setSelected] = useState<RegistrationWithAgent | null>(null);
+  const [exportCsvOpen, setExportCsvOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const handledDetailError = useRef('');
   const { toasts, show, dismiss } = useToast();
+  const detailRegistrationId = getRegistrationDetailId(searchParams.toString());
+  const detailRegistration = useAdminRegistrationById(detailRegistrationId);
+  const selected = detailRegistration.data ?? null;
+  const unconfirmedResults = useUnconfirmedReceiverResults();
   const registrations = useAdminRegistrations({
     status,
     search: debouncedSearch.trim(),
@@ -1083,7 +1129,7 @@ export function AdminRegistrationsPlaceholderPage() {
   }), [status, debouncedSearch, debouncedAgentSearch, dateFrom, dateTo, exported]);
   const filtersLabel = [
     status ? `Statut : ${statusItems.find((item) => item.status === status)?.label ?? status}` : '',
-    debouncedSearch.trim() ? `E-mail : ${debouncedSearch.trim()}` : '',
+    debouncedSearch.trim() ? `Identifiant : ${debouncedSearch.trim()}` : '',
     debouncedAgentSearch.trim() ? `Utilisateur : ${debouncedAgentSearch.trim()}` : '',
     dateFrom ? `Du ${dateFrom}` : '',
     dateTo ? `Au ${dateTo}` : '',
@@ -1099,6 +1145,25 @@ export function AdminRegistrationsPlaceholderPage() {
     return () => window.clearTimeout(timer);
   }, [search, agentSearch]);
 
+  useEffect(() => {
+    if (!detailRegistrationId || !detailRegistration.isError) return;
+    const errorKey = `${detailRegistrationId}:${detailRegistration.error.message}`;
+    if (handledDetailError.current === errorKey) return;
+    handledDetailError.current = errorKey;
+    show(detailRegistration.error.message, 'error');
+    setSearchParams(
+      updateRegistrationDetailParam(searchParams.toString(), null),
+      { replace: true },
+    );
+  }, [detailRegistration.error, detailRegistration.isError, detailRegistrationId, searchParams, setSearchParams, show]);
+
+  const selectRegistration = (registration: RegistrationWithAgent | null) => {
+    setSearchParams(
+      updateRegistrationDetailParam(searchParams.toString(), registration?.id ?? null),
+      { replace: true },
+    );
+  };
+
   return (
     <div className="page-content admin-registrations-page">
       <header className="page-header admin-page-header">
@@ -1111,9 +1176,15 @@ export function AdminRegistrationsPlaceholderPage() {
           <Button className="registration-export-desktop" variant="secondary" onClick={() => setExportPdfOpen(true)}>
             <FileDown size={17} aria-hidden="true" /> Exporter en PDF
           </Button>
+          <Button className="registration-export-desktop" variant="secondary" onClick={() => setExportCsvOpen(true)}>
+            <FileDown size={17} aria-hidden="true" /> Exporter en CSV
+          </Button>
           <details className="registration-export-mobile">
             <summary>Exporter</summary>
-            <div><button type="button" onClick={() => setExportPdfOpen(true)}>Exporter en PDF</button></div>
+            <div>
+              <button type="button" onClick={() => setExportPdfOpen(true)}>Exporter en PDF</button>
+              <button type="button" onClick={() => setExportCsvOpen(true)}>Exporter en CSV</button>
+            </div>
           </details>
         </div>
       </header>
@@ -1125,11 +1196,11 @@ export function AdminRegistrationsPlaceholderPage() {
         <div className="admin-registration-filters">
           <Input
             className="registration-search"
-            label="Rechercher par e-mail"
+            label="Rechercher par identifiant ou numéro"
             type="search"
             inputMode="email"
             autoComplete="off"
-            placeholder="Saisissez un e-mail"
+            placeholder="Identifiant ou numéro"
             icon={<Search size={18} aria-hidden="true" />}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -1167,13 +1238,21 @@ export function AdminRegistrationsPlaceholderPage() {
             </select>
           </label>
           <div className="status-filter-scroll" role="group" aria-label="Filtrer par statut">
+            <button
+              className={`status-filter-chip status-filter-confirmation ${status === 'gagne' ? 'status-filter-chip-active' : ''}`}
+              type="button"
+              aria-pressed={status === 'gagne'}
+              onClick={() => setStatus(status === 'gagne' ? null : 'gagne')}
+            >
+              À confirmer ({unconfirmedResults.data?.count ?? '…'})
+            </button>
             {[{ label: 'Tous', value: null }, ...statusItems.map(({ status: value, label }) => ({ label, value }))].map((filter) => (
               <button
                 className={`status-filter-chip ${status === filter.value ? 'status-filter-chip-active' : ''}`}
                 type="button"
                 key={filter.label}
                 aria-pressed={status === filter.value}
-                onClick={() => { setStatus(filter.value); setSelected(null); }}
+                onClick={() => setStatus(filter.value)}
               >
                 {filter.label}
               </button>
@@ -1199,22 +1278,32 @@ export function AdminRegistrationsPlaceholderPage() {
               action={<Button variant="secondary" onClick={() => void registrations.refetch()}>Réessayer</Button>}
             />
           </Card>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !selected && !detailRegistration.isPending ? (
           <Card className="registration-empty">
             <EmptyState icon={<Inbox size={23} aria-hidden="true" />} title="Aucun enregistré" description="Aucun enregistrement ne correspond à ces filtres." />
           </Card>
         ) : (
           <RegistrationRecordList
             items={items}
-            selected={selected}
-            onSelect={setSelected}
+            selected={null}
+            onSelect={selectRegistration}
             showAgent
             allowStatusChange
             showExportStatus
+            showCorrectionStatus
             readOnly
             show={show}
           />
         )}
+        <RegistrationDetails
+          registration={selected}
+          loading={Boolean(detailRegistrationId && detailRegistration.isPending)}
+          onClose={() => selectRegistration(null)}
+          allowStatusChange
+          showExportStatus
+          showCorrectionStatus
+          show={show}
+        />
         {registrations.hasNextPage && (
           <div className="load-more-wrap">
             <Button
@@ -1234,6 +1323,11 @@ export function AdminRegistrationsPlaceholderPage() {
         title="Tous les enregistrés"
         subtitle="Liste des enregistrements fictifs."
         filtersLabel={filtersLabel}
+      />
+      <ExportCsvModal
+        open={exportCsvOpen}
+        onClose={() => setExportCsvOpen(false)}
+        filters={exportFilters}
       />
       <ToastViewport toasts={toasts} dismiss={dismiss} />
     </div>

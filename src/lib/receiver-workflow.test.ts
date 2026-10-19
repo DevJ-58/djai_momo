@@ -83,6 +83,8 @@ describe('receiver registration order and start position', () => {
     day_seq,
     email: `${id}@example.test`,
     mdp: 'fictional',
+    numero: null,
+    description: null,
     progress_status,
     result: null,
     prize: null,

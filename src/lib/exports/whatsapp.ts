@@ -7,7 +7,7 @@ import {
 } from '../registration-days';
 import type { RegistrationExportRow } from '../../types/database';
 
-export type WhatsAppEntry = Pick<RegistrationExportRow, 'day_seq' | 'send_day' | 'email' | 'mdp'> & {
+export type WhatsAppEntry = Pick<RegistrationExportRow, 'day_seq' | 'send_day' | 'email' | 'mdp' | 'numero'> & {
   agentName: string;
 };
 
@@ -23,8 +23,10 @@ export function formatEntry(
   mdp: string,
   sendDay: string,
   today = getAbidjanToday(),
+  numero: string | null = null,
 ): string {
-  return `${toTitleCase(agentName)} (${formatDailyNumber(daySeq, sendDay, today)})\n${email}\n${mdp}`;
+  const entry = `${toTitleCase(agentName)} (${formatDailyNumber(daySeq, sendDay, today)})\n${email}\n${mdp}`;
+  return numero === null ? entry : `${entry}\n${numero}`;
 }
 
 export function buildMessages(
@@ -51,6 +53,7 @@ export function buildMessages(
         entry.mdp,
         entry.send_day,
         today,
+        entry.numero,
       );
       const candidate = current
         ? `${current}\n\n${currentDay === group.sendDay ? '' : `${heading}\n`}${formatted}`

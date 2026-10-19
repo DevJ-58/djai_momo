@@ -5,6 +5,8 @@ import { Button, Card } from '../ui';
 import { useAddRegistrationsBatch, type BatchRegistrationResult } from '../../hooks/useAddRegistrationsBatch';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { validateParsedEntries, parseCredentials, type ParsedEntry, type ParseCredentialsResult } from '../../lib/parseCredentials';
+import { DUPLICATE_REGISTRATION_MESSAGE } from '../../lib/registration-errors';
+import { formatNumeroForDisplay } from '../../lib/numero';
 import type { ToastMessage } from '../../hooks/use-toast';
 
 type PasteRegistrationPanelProps = {
@@ -16,8 +18,10 @@ type PasteRegistrationPanelProps = {
 type EntryOverride = {
   originalEmail: string;
   originalPassword: string;
+  originalNumero: string | null;
   email: string;
   password: string;
+  numero: string | null;
 };
 
 const emptyParseResult: ParseCredentialsResult = { entries: [], ignoredLines: [], truncated: false };
@@ -64,11 +68,15 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
       if (removedEntryIds.current.has(entry.id)) return [];
       const override = entryOverrides.current.get(entry.id);
       if (!override) return [entry];
-      if (entry.email !== override.originalEmail || entry.password !== override.originalPassword) {
+      if (
+        entry.email !== override.originalEmail
+        || entry.password !== override.originalPassword
+        || entry.numero !== override.originalNumero
+      ) {
         entryOverrides.current.delete(entry.id);
         return [entry];
       }
-      return [{ ...entry, email: override.email, password: override.password }];
+      return [{ ...entry, email: override.email, password: override.password, numero: override.numero }];
     });
     return { ...result, entries: validateParsedEntries(entries) };
   };
@@ -83,7 +91,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
           for (const id of Object.keys(next)) {
             const entry = nextParsed.entries.find((candidate) => candidate.id === id);
             const submitted = submittedCredentials.current.get(id);
-            if (!entry || submitted !== JSON.stringify([entry.email, entry.password])) {
+            if (!entry || submitted !== JSON.stringify([entry.email, entry.password, entry.numero])) {
               delete next[id];
             }
           }
@@ -127,7 +135,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
     setUserPasted(false);
     setCountdown(null);
     for (const entry of targetEntries) {
-      submittedCredentials.current.set(entry.id, JSON.stringify([entry.email, entry.password]));
+      submittedCredentials.current.set(entry.id, JSON.stringify([entry.email, entry.password, entry.numero]));
     }
     try {
       const batchResults = await addBatch({
@@ -142,7 +150,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
         onAdded(added.length);
         showToast(`${added.length} enregistré${added.length > 1 ? 's' : ''} ajouté${added.length > 1 ? 's' : ''}.`, 'success');
       }
-      const failed = batchResults.find((result) => result.error && result.error !== 'Déjà enregistré' && result.error !== 'Non envoyé');
+      const failed = batchResults.find((result) => result.error && result.error !== DUPLICATE_REGISTRATION_MESSAGE && result.error !== 'Non envoyé');
       if (failed?.error) showToast(failed.error, 'error');
       const allSucceeded = entries.length > 0 && entries.every((entry) => nextResults[entry.id]?.ok);
       if (allSucceeded) {
@@ -214,17 +222,20 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
     }
   };
 
-  const updateEntry = (id: string, field: 'email' | 'password', value: string) => {
+  const updateEntry = (id: string, field: 'email' | 'password' | 'numero', value: string) => {
     const existingEntry = parsed.entries.find((entry) => entry.id === id);
     if (existingEntry) {
       const existingOverride = entryOverrides.current.get(id);
       const email = field === 'email' ? value : existingEntry.email;
       const password = field === 'password' ? value : existingEntry.password;
+      const numero = field === 'numero' ? value || null : existingEntry.numero;
       entryOverrides.current.set(id, {
         originalEmail: existingOverride?.originalEmail ?? existingEntry.email,
         originalPassword: existingOverride?.originalPassword ?? existingEntry.password,
+        originalNumero: existingOverride ? existingOverride.originalNumero : existingEntry.numero,
         email,
         password,
+        numero,
       });
     }
     setParsed((current) => ({
@@ -282,7 +293,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
     && (entry.status !== 'warning' || confirmed[entry.id])
     && results[entry.id]
     && !results[entry.id].ok
-    && results[entry.id].error !== 'Déjà enregistré'
+    && results[entry.id].error !== DUPLICATE_REGISTRATION_MESSAGE
   ));
   const pendingEntries = eligibleEntries.filter((entry) => !results[entry.id]);
   const insertedResults = Object.values(results).filter((result) => result.ok);
@@ -304,7 +315,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
         aria-describedby="credentials-paste-help"
       />
       <p id="credentials-paste-help" className="paste-help">
-        Un ou plusieurs enregistrements. Email et mot de passe sur la même ligne ou sur deux lignes, avec ou sans libellés.
+        Exemple : jean@example.com, MotDePasse, 07 00 00 00 00 ou jean_test, MotDePasse. Le numéro est facultatif. Identifiant et mot de passe peuvent aussi être sur deux lignes, avec ou sans libellés.
       </p>
       <div className="paste-input-actions">
         <Button type="button" variant="secondary" disabled={isSubmitting} onClick={() => void pasteFromClipboard()}>
@@ -330,7 +341,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
       )}
 
       {text.trim() && entries.length === 0 && (
-        <p className="paste-feedback" role="status">Aucun email détecté. Vérifiez le texte collé.</p>
+        <p className="paste-feedback" role="status">Aucun identifiant détecté. Vérifiez le texte collé.</p>
       )}
 
       {!!entries.length && (
@@ -350,10 +361,11 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
             Tout {showAllPasswords ? 'masquer' : 'afficher'} les mots de passe
           </Button>
           <div className="paste-entry-list" role="table" aria-label="Entrées détectées">
-            <div className="paste-entry-header" role="row">
+            <div className={`paste-entry-header${entries.some((entry) => entry.numero !== null) ? ' has-numero' : ''}`} role="row">
               <span role="columnheader">État</span>
-              <span role="columnheader">E-mail</span>
+              <span role="columnheader">Identifiant</span>
               <span role="columnheader">Mot de passe</span>
+              {entries.some((entry) => entry.numero !== null) && <span role="columnheader">Numéro</span>}
               <span role="columnheader">Actions</span>
             </div>
             {entries.map((entry) => {
@@ -361,16 +373,20 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
               const visible = visibility[entry.id] ?? showAllPasswords;
               const result = results[entry.id];
               return (
-                <div className={`paste-entry ${status.className}`} role="row" key={entry.id}>
+                <div className={`paste-entry ${status.className}${entries.some((candidate) => candidate.numero !== null) ? ' has-numero' : ''}`} role="row" key={entry.id}>
                   <div className="paste-entry-status" role="cell">
                     <span className={`paste-status-icon ${status.className}`} role="img" aria-label={status.label}>{status.icon}</span>
                     <span className="paste-mobile-label">{status.label}</span>
                   </div>
                   <label className="paste-field" role="cell">
-                    <span className="paste-mobile-label">E-mail</span>
+                    <span className="paste-mobile-label">Identifiant</span>
                     <input
-                      aria-label={`E-mail de l’entrée ${entry.sourceLine}`}
-                      type="email"
+                      aria-label={`Identifiant de l’entrée ${entry.sourceLine}`}
+                      type="text"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       disabled={isSubmitting}
                       autoComplete="off"
                       value={entry.email}
@@ -399,6 +415,22 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
                       {visible ? 'Masquer' : 'Afficher'}
                     </button>
                   </div>
+                  {entries.some((candidate) => candidate.numero !== null) && (
+                    <label className="paste-field" role="cell">
+                      <span className="paste-mobile-label">Numéro</span>
+                      <input
+                        aria-label={`Numéro de l’entrée ${entry.sourceLine}`}
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="off"
+                        disabled={isSubmitting}
+                        value={entry.numero === null ? '' : entry.issues.includes('Numéro invalide : chiffres uniquement, 4 à 20.')
+                          ? entry.numero
+                          : formatNumeroForDisplay(entry.numero)}
+                        onChange={(event) => updateEntry(entry.id, 'numero', event.target.value)}
+                      />
+                    </label>
+                  )}
                   <div className="paste-entry-actions" role="cell">
                     {entry.status === 'warning' && (
                       <label className="paste-confirm">
@@ -466,7 +498,7 @@ export function PasteRegistrationPanel({ addedCount, onAdded, showToast }: Paste
           disabled={!online || isSubmitting || pendingEntries.length === 0}
           onClick={() => void submitEntries(pendingEntries)}
         >
-          Enregistrer {pendingEntries.length} enregistrés
+          Enregistrer {validCount} enregistrés
         </Button>
         <p className="session-add-count" aria-live="polite">{addedCount} ajoutés pendant cette session</p>
       </div>

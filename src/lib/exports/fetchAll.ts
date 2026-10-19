@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import { adminErrorMessage } from '../admin-errors';
 import type { RegistrationExportRow, RegistrationStatus } from '../../types/database';
+import { registrationSearchFilter } from '../registration-search';
 
 export type RegistrationExportFilters = {
   status?: RegistrationStatus | null;
@@ -29,14 +30,14 @@ export async function fetchAllRegistrations(
   for (let page = 0; page < MAX_ROWS / PAGE_SIZE; page += 1) {
     let query = supabase
       .from('registrations')
-      .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
+      .select('id, agent_id, seq, send_day, day_seq, email, mdp, numero, description, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
       .order('send_day', { ascending: true })
       .order('day_seq', { ascending: true });
 
     if (filters.status) query = query.eq('status', filters.status);
     if (filters.agentId) query = query.eq('agent_id', filters.agentId);
     if (filters.agentName) query = query.ilike('profiles.full_name', `%${filters.agentName}%`);
-    if (filters.search) query = query.ilike('email', `%${filters.search}%`);
+    if (filters.search) query = query.or(registrationSearchFilter(filters.search));
     if (filters.dateFrom) query = query.gte('created_at', `${filters.dateFrom}T00:00:00Z`);
     if (filters.dateTo) query = query.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
     if (filters.exported === 'exported') query = query.not('exported_at', 'is', null);
@@ -60,7 +61,7 @@ export async function fetchAllRegistrations(
   if (filters.status) probe = probe.eq('status', filters.status);
   if (filters.agentId) probe = probe.eq('agent_id', filters.agentId);
   if (filters.agentName) probe = probe.ilike('profiles.full_name', `%${filters.agentName}%`);
-  if (filters.search) probe = probe.ilike('email', `%${filters.search}%`);
+  if (filters.search) probe = probe.or(registrationSearchFilter(filters.search));
   if (filters.dateFrom) probe = probe.gte('created_at', `${filters.dateFrom}T00:00:00Z`);
   if (filters.dateTo) probe = probe.lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
   if (filters.exported === 'exported') probe = probe.not('exported_at', 'is', null);

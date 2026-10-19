@@ -8,6 +8,8 @@ export type ReceiverRegistration = {
   day_seq: number;
   email: string;
   mdp: string;
+  numero: string | null;
+  description: string | null;
   progress_status: ReceiverProgressStatus;
   result: ReceiverResult | null;
   prize: number | null;

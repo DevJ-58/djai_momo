@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminRegistrationsKey, adminStatsKey, agentsOverviewKey, dailyRegistrationsKey, recentRegistrationsKey } from './useAdmin';
+import { adminRegistrationsKey, adminStatsKey, agentsOverviewKey, dailyRegistrationsKey, recentRegistrationsKey, unconfirmedReceiverResultsKey } from './useAdmin';
 import { registrationListKey, registrationStatsKey } from './useRegistrations';
 import { registrationHistoryKey } from './useRegistrationHistory';
 import { registrationStatusErrorMessage } from '../lib/registration-errors';
@@ -23,7 +23,7 @@ export function useSetRegistrationStatus() {
         .from('registrations')
         .update({
           status: newStatus,
-          amount: newStatus === 'paye' ? amount : null,
+          amount: newStatus === 'paye' || newStatus === 'gagne' ? amount : null,
           admin_note: note,
         }, { count: 'exact' })
         .eq('id', registrationId);
@@ -50,6 +50,7 @@ export function useSetRegistrationStatus() {
         queryClient.invalidateQueries({ queryKey: agentsOverviewKey }),
         queryClient.invalidateQueries({ queryKey: dailyRegistrationsKey }),
         queryClient.invalidateQueries({ queryKey: recentRegistrationsKey }),
+        queryClient.invalidateQueries({ queryKey: unconfirmedReceiverResultsKey }),
         queryClient.invalidateQueries({ queryKey: registrationHistoryKey(registrationId) }),
       ]);
     },

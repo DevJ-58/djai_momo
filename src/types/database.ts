@@ -1,4 +1,14 @@
-export type RegistrationStatus = 'en_attente' | 'paye' | 'refuse' | 'probleme';
+export const REGISTRATION_STATUSES = [
+  'en_attente',
+  'paye',
+  'refuse',
+  'probleme',
+  'gagne',
+  'echec',
+  'renonce',
+] as const;
+
+export type RegistrationStatus = typeof REGISTRATION_STATUSES[number];
 
 export type Registration = {
   id: string;
@@ -8,6 +18,8 @@ export type Registration = {
   day_seq: number;
   email: string;
   mdp: string;
+  numero: string | null;
+  description: string | null;
   status: RegistrationStatus;
   amount: number | null;
   admin_note: string | null;
@@ -45,6 +57,7 @@ export type Notification = {
   registration_id: string | null;
   read_at: string | null;
   created_at: string;
+  registration?: { status: RegistrationStatus; amount: number | null } | null;
 };
 
 export type CorrectionRequestStatus = 'ouverte' | 'traitee';

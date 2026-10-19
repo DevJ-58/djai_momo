@@ -1,7 +1,12 @@
+import { parseIdentifier } from './parseIdentifier';
+import { parseNumero, NUMERO_INVALID_MESSAGE } from './numero';
+
 export type ParsedEntry = {
   id: string;
   email: string;
   password: string;
+  numero: string | null;
+  parseError?: string;
   status: 'valid' | 'warning' | 'invalid';
   issues: string[];
   sourceLine: number;
@@ -13,14 +18,13 @@ export type ParseCredentialsResult = {
   truncated: boolean;
 };
 
-type DraftEntry = Pick<ParsedEntry, 'id' | 'email' | 'password' | 'sourceLine'>;
+type DraftEntry = Pick<ParsedEntry, 'id' | 'email' | 'password' | 'numero' | 'sourceLine' | 'parseError'>;
 type EmailMatch = { email: string; start: number; end: number };
 
 const MAX_TEXT_LENGTH = 20_000;
 const MAX_ENTRIES = 100;
-const EMAIL_LABEL = /^(?:adresse\s+e[\s-]?mail|e[\s-]?mail|mail|identifiant|login|id)\s*[:=\-]\s*/i;
+const EMAIL_LABEL = /^(?:adresse\s+e[\s-]?mail|e[\s-]?mail|mail|identifiant|pseudo|username|login|id)\s*[:=\-]\s*/i;
 const PASSWORD_LABEL = /^(?:mot[\s-]+de[\s-]+passe|mdp|password|pass|pwd|code)\s*[:=\-]\s*/i;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)*\.[^\s@.]{2,}$/;
 
 function normalizeText(text: string) {
   return text
@@ -101,23 +105,41 @@ function removeEmailSeparator(value: string) {
 
 function isHeader(value: string) {
   const normalized = normalizeLabel(value).trim().toLocaleLowerCase('fr');
-  return /^(?:[\p{L} .'-]+\s+\(\d+\))$/u.test(value.trim())
-    || /^(?:e-?mail|mail|adresse e-?mail)\s+(?:mot de passe|mdp|password|pass|pwd)$/u.test(normalized);
+  if (/^(?:[\p{L} .'-]+\s+\(\d+\))$/u.test(value.trim())) return true;
+
+  const fields = normalized.split(/[,;|\t]/u).map((field) => field.trim());
+  const identifierHeader = /^(?:e-?mail|mail|adresse e-?mail|identifiant|pseudo)$/u;
+  const passwordHeader = /^(?:mot de passe|mdp|password|pass|pwd)$/u;
+  const numeroHeader = /^(?:numero|telephone|phone)$/u;
+  if (
+    fields.length >= 2
+    && fields.length <= 3
+    && identifierHeader.test(fields[0] ?? '')
+    && passwordHeader.test(fields[1] ?? '')
+    && (fields.length === 2 || numeroHeader.test(fields[2] ?? ''))
+  ) return true;
+
+  return /^(?:e-?mail|mail|adresse e-?mail|identifiant|pseudo)\s+(?:mot de passe|mdp|password|pass|pwd)(?:\s+(?:numero|telephone|phone))?$/u.test(normalized);
 }
 
 export function validateParsedEntries(entries: ParsedEntry[]): ParsedEntry[] {
-  const emails = new Set<string>();
+  const identifiers = new Set<string>();
   return entries.map((entry) => {
-    const issues: string[] = [];
-    const email = entry.email.trim();
+    const issues: string[] = entry.parseError ? [entry.parseError] : [];
+    const parsedIdentifier = parseIdentifier(entry.email);
+    const email = parsedIdentifier.success ? parsedIdentifier.value : entry.email.trim();
     const password = cleanPassword(entry.password);
-    const normalizedEmail = email.toLocaleLowerCase('fr');
-
-    if (!EMAIL_PATTERN.test(email) || email.length > 254) {
-      issues.push(email.length > 254 ? 'L’e-mail ne peut pas dépasser 254 caractères.' : 'Adresse e-mail invalide.');
+    const normalizedIdentifier = email.toLocaleLowerCase('fr');
+    let numero = entry.numero;
+    try {
+      numero = parseNumero(numero);
+    } catch {
+      issues.push(NUMERO_INVALID_MESSAGE);
     }
-    if (normalizedEmail && emails.has(normalizedEmail)) issues.push('Doublon dans le texte collé');
-    if (normalizedEmail) emails.add(normalizedEmail);
+
+    if (!parsedIdentifier.success) issues.push(parsedIdentifier.error);
+    if (parsedIdentifier.success && identifiers.has(normalizedIdentifier)) issues.push('Doublon dans le texte collé');
+    if (parsedIdentifier.success) identifiers.add(normalizedIdentifier);
     if (!password) issues.push('Mot de passe manquant');
     else if (password.length > 100) issues.push('Le mot de passe ne peut pas dépasser 100 caractères.');
     else if (/\s/.test(password)) issues.push('Contient des espaces : vérifiez');
@@ -127,6 +149,7 @@ export function validateParsedEntries(entries: ParsedEntry[]): ParsedEntry[] {
       ...entry,
       email,
       password,
+      numero,
       status: invalid ? 'invalid' : issues.length ? 'warning' : 'valid',
       issues,
     };
@@ -146,7 +169,7 @@ export function parseCredentials(text: string): ParseCredentialsResult {
   let truncated = truncatedByText;
   let stopped = false;
 
-  const addDraft = (email: string, sourceLine: number, password = '') => {
+  const addDraft = (identifier: string, sourceLine: number, password = '', numero: string | null = null, parseError?: string) => {
     if (drafts.length >= MAX_ENTRIES) {
       truncated = true;
       stopped = true;
@@ -154,9 +177,11 @@ export function parseCredentials(text: string): ParseCredentialsResult {
     }
     const entry: DraftEntry = {
       id: `credential-${sourceLine}-${drafts.length + 1}`,
-      email: email.trim(),
+      email: identifier.trim(),
       password,
+      numero,
       sourceLine,
+      ...(parseError ? { parseError } : {}),
     };
     drafts.push(entry);
     current = entry;
@@ -170,6 +195,42 @@ export function parseCredentials(text: string): ParseCredentialsResult {
       current.password = '';
       pendingPassword = false;
     }
+  };
+
+  const splitCredentialTail = (value: string, separator: string) => {
+    const values = value.split(separator);
+    const phoneColumns = separator === ',' || separator === ';' || separator === '|' || separator === '\t' || separator === '/';
+    const phoneValue = values.at(-1) ?? '';
+    const hasPhoneColumn = values.length > 1 && (
+      phoneColumns || /^[+\d][+\d ().\-\u00a0\u202f]*$/u.test(phoneValue)
+    );
+    if (!hasPhoneColumn) return { password: cleanPassword(value), numero: null, parseError: undefined };
+    if (values.length > 2) {
+      return {
+        password: cleanPassword(values[0]),
+        numero: values[1]?.trim() || null,
+        parseError: 'Trop de colonnes (identifiant, mot de passe, numéro).',
+      };
+    }
+    return { password: cleanPassword(values[0]), numero: values[1]?.trim() || null, parseError: undefined };
+  };
+
+  const splitIdentifierAndPassword = (value: string) => {
+    const delimited = value.match(/^(.*?)\s*(=>|->|[:;,|/\t])\s*(.*)$/u);
+    if (delimited) {
+      const tail = splitCredentialTail(delimited[3], delimited[2]);
+      return { identifier: delimited[1].trim(), ...tail };
+    }
+    const hyphenated = value.match(/^(.+?)\s+-\s+(.+)$/u);
+    if (hyphenated) return { identifier: hyphenated[1].trim(), password: cleanPassword(hyphenated[2]), numero: null, parseError: undefined };
+    const spaced = value.match(/^(\S+)\s+(.+)$/u);
+    if (spaced && /[_+.@-]|\d/u.test(spaced[1])) {
+      const phoneSuffix = spaced[2].match(/^(.*?)\s+([+()\d][+()\d .\-\u00a0\u202f]*)$/u);
+      return phoneSuffix
+        ? { identifier: spaced[1], password: cleanPassword(phoneSuffix[1]), numero: phoneSuffix[2].trim() || null, parseError: undefined }
+        : { identifier: spaced[1], password: cleanPassword(spaced[2]), numero: null, parseError: undefined };
+    }
+    return null;
   };
 
   for (const [lineIndex, rawLine] of lines.entries()) {
@@ -190,11 +251,24 @@ export function parseCredentials(text: string): ParseCredentialsResult {
         const match = emailMatches[index];
         const nextMatch = emailMatches[index + 1];
         const trailing = sourceContent.slice(match.end, nextMatch?.start ?? sourceContent.length);
-        const password = removeEmailSeparator(trailing.replace(/^\s*(?:\](?:\([^)]*\))?|>)+/, ''));
-        const entry = addDraft(match.email, lineNumber, password);
+        const cleanedTrailing = trailing.replace(/^\s*(?:\](?:\([^)]*\))?|>)+/, '');
+        const delimiter = cleanedTrailing.match(/^\s*(=>|->|[:;,|/\t])\s*(.*)$/u);
+        const fields = delimiter
+          ? splitCredentialTail(delimiter[2], delimiter[1])
+          : { password: removeEmailSeparator(cleanedTrailing), numero: null, parseError: undefined };
+        const entry = addDraft(match.email, lineNumber, fields.password, fields.numero, fields.parseError);
         if (!entry) break;
         if (nextMatch && pendingPassword) markMissingPassword();
       }
+      continue;
+    }
+
+    if (emailLabel) {
+      afterEntryHeader = false;
+      if (pendingPassword) markMissingPassword();
+      const split = splitIdentifierAndPassword(sourceContent);
+      const identifier = split?.identifier ?? sourceContent.trim();
+      addDraft(identifier, lineNumber, split?.password ?? '', split?.numero ?? null, split?.parseError);
       continue;
     }
 
@@ -237,6 +311,22 @@ export function parseCredentials(text: string): ParseCredentialsResult {
       afterEntryHeader = true;
       continue;
     }
+
+    const split = splitIdentifierAndPassword(detectionLine);
+    if (split) {
+      afterEntryHeader = false;
+      if (pendingPassword) markMissingPassword();
+      addDraft(split.identifier, lineNumber, split.password);
+      continue;
+    }
+
+    const standaloneIdentifier = parseIdentifier(detectionLine);
+    if (!/\s/u.test(detectionLine)) {
+      afterEntryHeader = false;
+      addDraft(standaloneIdentifier.success ? standaloneIdentifier.value : detectionLine, lineNumber);
+      continue;
+    }
+
     afterEntryHeader = false;
     ignoredLines.push(rawLine);
   }

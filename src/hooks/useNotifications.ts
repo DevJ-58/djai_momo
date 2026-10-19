@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { registrationErrorMessage } from '../lib/registration-errors';
 import { useAuth } from './useAuth';
-import type { Notification } from '../types/database';
+import type { Notification, RegistrationListItem } from '../types/database';
 
 export const notificationsKey = (userId: string) => ['notifications', userId] as const;
 export const unreadNotificationsCountKey = (userId: string) => ['notifications-unread-count', userId] as const;
@@ -23,7 +23,25 @@ export function useNotifications() {
         .limit(20)
         .returns<Notification[]>();
       if (error) throw new Error(registrationErrorMessage(error));
-      return data;
+      const registrationIds = [...new Set(data
+        .map(({ registration_id }) => registration_id)
+        .filter((id): id is string => id !== null))];
+      if (registrationIds.length === 0) return data;
+
+      const registrations = await supabase
+        .from('registrations')
+        .select('id, status, amount, numero')
+        .in('id', registrationIds)
+        .returns<Array<Pick<RegistrationListItem, 'id' | 'status' | 'amount' | 'numero'>>>();
+      if (registrations.error) throw new Error(registrationErrorMessage(registrations.error));
+
+      const registrationById = new Map(registrations.data.map((registration) => [registration.id, registration]));
+      return data.map((notification) => ({
+        ...notification,
+        registration: notification.registration_id
+          ? registrationById.get(notification.registration_id) ?? null
+          : null,
+      }));
     },
     refetchOnWindowFocus: true,
   });

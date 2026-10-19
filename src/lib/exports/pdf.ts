@@ -7,6 +7,9 @@ const STATUS_LABELS: Record<RegistrationStatus, string> = {
   paye: 'Payé',
   refuse: 'Refusé',
   probleme: 'Problème',
+  gagne: 'Gagné',
+  echec: 'Échec',
+  renonce: 'Renoncé',
 };
 
 const STATUS_COLORS: Record<RegistrationStatus, [number, number, number]> = {
@@ -14,6 +17,9 @@ const STATUS_COLORS: Record<RegistrationStatus, [number, number, number]> = {
   paye: [16, 185, 129],
   refuse: [244, 63, 94],
   probleme: [139, 92, 246],
+  gagne: [21, 128, 61],
+  echec: [244, 63, 94],
+  renonce: [87, 83, 78],
 };
 
 export function sanitizePdfText(value: string): string {
@@ -183,20 +189,22 @@ export async function generateRegistrationsPdf(options: GenerateRegistrationsPdf
   const columns = [
     'Agent',
     'N°',
-    'Email',
+    'Identifiant',
     'Statut',
     'Montant',
     'Date',
     ...(options.includePasswords ? ['Mot de passe'] : []),
+    'Numéro',
   ];
   const body = options.rows.map((row) => [
     sanitizePdfText(toTitleCase(row.profiles?.full_name ?? '—')),
     String(row.seq),
     sanitizePdfText(row.email),
     statusLabel(row.status),
-    amountForPdf(row.status === 'paye' ? row.amount : null),
+    amountForPdf(row.status === 'paye' || row.status === 'gagne' ? row.amount : null),
     sanitizePdfText(formatDate(row.created_at)),
     ...(options.includePasswords ? [sanitizePdfText(row.mdp)] : []),
+    row.numero ?? '',
   ]);
 
   autoTableModule.default(doc, {

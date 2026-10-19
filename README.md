@@ -81,6 +81,8 @@ L’application se connecte au projet Supabase déjà configuré ; elle ne crée
 
 Les politiques RLS et fonctions SQL existantes restent la source d’autorité pour les droits d’accès. Aucun changement de base n’est requis par ce dépôt.
 
+Les statuts d’enregistrement utilisés par l’interface sont `en_attente`, `paye`, `refuse`, `probleme`, `gagne`, `echec` et `renonce`. Les statuts de résultat (`gagne`, `echec`, `renonce`) sont posés automatiquement par la base lors du traitement par le receveur. Un gain reste à confirmer par l’administrateur avant de devenir `paye`. Les notifications associées à un enregistrement sont également créées par la base.
+
 ## Créer le compte administrateur
 
 1. Créez le compte avec le parcours d’inscription normal de l’application et confirmez l’adresse e-mail si cette option est activée dans Supabase Auth.

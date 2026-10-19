@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Bell, CheckCheck } from 'lucide-react';
+import {
+  Bell,
+  CheckCheck,
+  CircleAlert,
+  CircleDollarSign,
+  MessageSquareText,
+  UserRoundPlus,
+  type LucideIcon,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatRelative } from '../../lib/format';
+import type { RegistrationStatus } from '../../types/database';
+import { Badge } from '../ui';
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
@@ -13,6 +23,27 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useAuth } from '../../hooks/useAuth';
 import { BottomNavItem } from '../layout/BottomNavItem';
 import { formatUnreadNotificationCount } from './notification-count';
+import type { Notification } from '../../types/database';
+
+const notificationIcons: Record<string, LucideIcon> = {
+  receiver_result: CircleDollarSign,
+  status_changed: CircleAlert,
+  correction_request: MessageSquareText,
+  new_registration: UserRoundPlus,
+};
+
+function statusFromNotification(notification: Notification): RegistrationStatus | null {
+  if (notification.registration?.status) return notification.registration.status;
+  const content = `${notification.title} ${notification.body}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+  if (/\bgagne\b/.test(content)) return 'gagne';
+  if (/\bechec\b/.test(content)) return 'echec';
+  if (/\brenonce\b/.test(content)) return 'renonce';
+  if (/\bpaye\b/.test(content)) return 'paye';
+  if (/\brefuse\b/.test(content)) return 'refuse';
+  if (/\bprobleme\b/.test(content)) return 'probleme';
+  if (/\ben attente\b/.test(content)) return 'en_attente';
+  return null;
+}
 
 type AgentNotificationsProps = {
   placement: 'sidebar' | 'mobile';
@@ -96,7 +127,7 @@ export function NotificationBell({ placement }: AgentNotificationsProps) {
       setOpen(false);
       if (registrationId) {
         const destination = role === 'admin' ? '/admin/enregistres' : '/espace';
-        navigate(`${destination}?registration=${encodeURIComponent(registrationId)}`);
+        navigate(`${destination}?r=${encodeURIComponent(registrationId)}`, { replace: true });
       }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Une erreur est survenue. Veuillez réessayer.');
@@ -183,7 +214,7 @@ export function NotificationBell({ placement }: AgentNotificationsProps) {
           {actionError && <p className="agent-notifications-error" role="alert">{actionError}</p>}
           {unreadCount.isError && (
             <p className="agent-notifications-error" role="alert">
-              Impossible de charger le nombre de notifications non lues : {unreadCount.error.message}
+              Impossible de charger le nombre de notifications non lues.
             </p>
           )}
           {notifications.isPending ? (
@@ -192,7 +223,7 @@ export function NotificationBell({ placement }: AgentNotificationsProps) {
             </div>
           ) : notifications.isError ? (
             <div className="agent-notifications-error" role="alert">
-              <span>{notifications.error.message}</span>
+              <span>Impossible de charger les notifications.</span>
               <Button variant="ghost" onClick={() => void notifications.refetch()}>Réessayer</Button>
             </div>
           ) : notifications.data.length === 0 ? (
@@ -201,9 +232,15 @@ export function NotificationBell({ placement }: AgentNotificationsProps) {
             <ul className="agent-notifications-list">
               {notifications.data.map((notification) => (
                 <li key={notification.id}>
+                  {(() => {
+                    const Icon = notificationIcons[notification.type] ?? Bell;
+                    const status = statusFromNotification(notification);
+                    const accessibleLabel = `${notification.title}. ${notification.body}. ${formatRelative(notification.created_at)}${notification.read_at ? '' : '. Non lue'}`;
+                    return (
                   <button
                     type="button"
                     className={`agent-notification-item ${notification.read_at ? '' : 'agent-notification-unread'}`}
+                    aria-label={accessibleLabel}
                     disabled={markRead.isPending || (!online && !notification.read_at)}
                     onClick={() => void handleNotificationClick(
                       notification.id,
@@ -212,12 +249,16 @@ export function NotificationBell({ placement }: AgentNotificationsProps) {
                     )}
                   >
                     {!notification.read_at && <span className="agent-notification-dot" aria-label="Non lue" />}
+                    <Icon className="agent-notification-type-icon" size={18} aria-hidden="true" />
                     <span className="agent-notification-copy">
                       <strong>{notification.title}</strong>
                       <span>{notification.body}</span>
+                      {status && <Badge status={status} amount={notification.registration?.amount} />}
                       <time dateTime={notification.created_at}>{formatRelative(notification.created_at)}</time>
                     </span>
                   </button>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>

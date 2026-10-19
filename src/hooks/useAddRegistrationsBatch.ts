@@ -14,7 +14,7 @@ export type BatchRegistrationResult = {
 };
 
 type BatchInput = {
-  entries: Pick<ParsedEntry, 'id' | 'email' | 'password'>[];
+  entries: Pick<ParsedEntry, 'id' | 'email' | 'password' | 'numero'>[];
   onProgress?: (completed: number, total: number) => void;
 };
 
@@ -60,6 +60,7 @@ export function useAddRegistrationsBatch() {
             const registration = await insertRegistration({
               email: entry.email,
               mdp: entry.password,
+              numero: entry.numero,
               agentId: user.id,
             });
             result = { id: entry.id, ok: true, daySeq: registration.day_seq, sendDay: registration.send_day };
@@ -97,9 +98,9 @@ export function useAddRegistrationsBatch() {
               id: entry.id,
               ok: false,
               error: error instanceof Error && error.message === DUPLICATE_REGISTRATION_MESSAGE
-                ? 'Déjà enregistré'
+                ? DUPLICATE_REGISTRATION_MESSAGE
                 : code === '23505' && !isSequenceCollision(error)
-                  ? 'Déjà enregistré'
+                  ? DUPLICATE_REGISTRATION_MESSAGE
                   : code === '23505' && isSequenceCollision(error)
                     ? 'Conflit de numéro. Réessayez.'
                   : registrationErrorMessage(error),

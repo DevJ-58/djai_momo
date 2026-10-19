@@ -23,6 +23,9 @@ const statusOptions: Array<{ value: RegistrationStatus; label: string }> = [
   { value: 'paye', label: 'Payé' },
   { value: 'refuse', label: 'Refusé' },
   { value: 'probleme', label: 'Problème' },
+  { value: 'gagne', label: 'Gagné' },
+  { value: 'echec', label: 'Échec' },
+  { value: 'renonce', label: 'Renoncé' },
 ];
 
 export function WhatsAppExportModal({ open, agent, onClose }: WhatsAppExportModalProps) {
@@ -81,6 +84,7 @@ export function WhatsAppExportModal({ open, agent, onClose }: WhatsAppExportModa
     send_day: row.send_day,
     email: row.email,
     mdp: row.mdp,
+    numero: row.numero,
     agentName: row.profiles?.full_name ?? agent?.full_name ?? '',
   }));
   const messages = useMemo(() => buildMessages(entries), [rows, scope, status, agent?.full_name]);

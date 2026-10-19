@@ -27,6 +27,10 @@ export type AuditLogEntry = {
   actor_profile?: { full_name: string | null } | null;
 };
 
+export const registrationAuditKey = (registrationId: string) => (
+  ['registration-audit-by-registration', registrationId] as const
+);
+
 export function useAuditLog(filters: AuditLogFilters = {}) {
   const pageSize = filters.pageSize ?? 30;
   const page = filters.page ?? 0;
@@ -56,7 +60,7 @@ export function useAuditLog(filters: AuditLogFilters = {}) {
 
 export function useRegistrationAudit(registrationId: string) {
   return useQuery({
-    queryKey: ['registration-audit-by-registration', registrationId],
+    queryKey: registrationAuditKey(registrationId),
     enabled: Boolean(registrationId),
     queryFn: async () => {
       const { data, error } = await supabase

@@ -1,16 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { registrationStatusErrorMessage } from '../lib/registration-errors';
-import type { RegistrationStatus, StatusHistoryEntry } from '../types/database';
+import { REGISTRATION_STATUSES, type RegistrationStatus, type StatusHistoryEntry } from '../types/database';
 
 export const registrationHistoryKey = (registrationId: string) => (
   ['registration-history', registrationId] as const
 );
 
-const statuses: RegistrationStatus[] = ['en_attente', 'paye', 'refuse', 'probleme'];
-
 function isRegistrationStatus(value: unknown): value is RegistrationStatus {
-  return typeof value === 'string' && statuses.some((status) => status === value);
+  return typeof value === 'string' && REGISTRATION_STATUSES.some((status) => status === value);
 }
 
 function isStatusHistoryEntry(value: unknown): value is StatusHistoryEntry {

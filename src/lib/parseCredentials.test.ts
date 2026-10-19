@@ -24,6 +24,45 @@ describe('parseCredentials', () => {
     expect(entry(text)[0]).toMatchObject({ email: 'a@example.com', password: 'secret', status: 'valid' });
   });
 
+  it('parses an optional number after the password', () => {
+    expect(entry('a@example.com, secret, 07 01 02 03 04')[0]).toMatchObject({
+      email: 'a@example.com',
+      password: 'secret',
+      numero: '0701020304',
+      status: 'valid',
+    });
+  });
+
+  it('parses tab-separated spreadsheet columns', () => {
+    expect(entry('a@example.com\tsecret\t+225 07 01 02 03 04')[0]).toMatchObject({
+      email: 'a@example.com',
+      password: 'secret',
+      numero: '+2250701020304',
+      status: 'valid',
+    });
+  });
+
+  it('keeps rows without a number unchanged and ignores an empty number column', () => {
+    expect(entry('a@example.com, secret\nb@example.com, other, ')[0].numero).toBeNull();
+    expect(entry('a@example.com, secret\nb@example.com, other, ')[1]).toMatchObject({
+      email: 'b@example.com', password: 'other', numero: null, status: 'valid',
+    });
+  });
+
+  it('marks an invalid number with the shared validation reason', () => {
+    expect(entry('a@example.com, secret, 123')[0].issues).toContain('Numéro invalide : chiffres uniquement, 4 à 20.');
+  });
+
+  it('marks rows with more than three columns invalid', () => {
+    expect(entry('a@example.com, secret, 07010203, extra')[0].issues)
+      .toContain('Trop de colonnes (identifiant, mot de passe, numéro).');
+  });
+
+  it('does not treat numbers as duplicate criteria', () => {
+    expect(entry('a@example.com, secret, 07010203\nA@example.com, other, 07010204')[1].issues)
+      .toContain('Doublon dans le texte collé');
+  });
+
   it('parses labelled email followed by a labelled password', () => {
     expect(entry('Email : one@example.com\nMot de passe : secret')[0]).toMatchObject({
       email: 'one@example.com', password: 'secret', status: 'valid',
@@ -42,6 +81,11 @@ describe('parseCredentials', () => {
 
   it('ignores a copied spreadsheet column header', () => {
     expect(parseCredentials('Email\tMot de passe\none@example.com\tsecret').ignoredLines).toEqual([]);
+  });
+
+  it('ignores a copied spreadsheet header with the optional number column', () => {
+    expect(parseCredentials('Email\tMot de passe\tNuméro\none@example.com\tsecret\t0701020304').entries)
+      .toHaveLength(1);
   });
 
   it('ignores WhatsApp names and keeps the credentials', () => {
@@ -130,8 +174,8 @@ describe('parseCredentials', () => {
     });
   });
 
-  it('does not treat the word email alone as an address', () => {
-    expect(parseCredentials('email')).toMatchObject({ entries: [], ignoredLines: ['email'] });
+  it('treats a single-word identifier as a pseudo', () => {
+    expect(entry('email')[0]).toMatchObject({ email: 'email', status: 'invalid', issues: ['Mot de passe manquant'] });
   });
 
   it('truncates parsing after 100 entries', () => {
@@ -175,9 +219,36 @@ describe('parseCredentials', () => {
     expect(entry('One@Example.com: secret')[0].email).toBe('One@Example.com');
   });
 
-  it('flags an email longer than 254 characters', () => {
+  it('parses mixed email and pseudo entries and reports invalid identifiers in the preview', () => {
+    const entries = entry([
+      'jean@example.com: motdepasse1',
+      'jean_test: motdepasse2',
+      'user@: motdepasse3',
+    ].join('\n'));
+
+    expect(entries).toMatchObject([
+      { email: 'jean@example.com', password: 'motdepasse1', status: 'valid' },
+      { email: 'jean_test', password: 'motdepasse2', status: 'valid' },
+      { email: 'user@', password: 'motdepasse3', status: 'invalid', issues: ['Adresse e-mail invalide.'] },
+    ]);
+  });
+
+  it('parses a pseudo and password on separate lines', () => {
+    expect(entry('jean_test\nMotDePasse')[0]).toMatchObject({
+      email: 'jean_test',
+      password: 'MotDePasse',
+      status: 'valid',
+    });
+  });
+
+  it('reports a whitespace error for an explicitly labelled identifier', () => {
+    expect(entry('Identifiant : jean test\nsecret')[0].issues)
+      .toContain("Pas d'espaces dans l'identifiant.");
+  });
+
+  it('flags an identifier longer than 254 characters', () => {
     const email = `${'a'.repeat(245)}@example.com`;
-    expect(entry(`${email}: secret`)[0].issues[0]).toBe('L’e-mail ne peut pas dépasser 254 caractères.');
+    expect(entry(`${email}: secret`)[0].issues[0]).toBe('254 caractères maximum.');
   });
 
   it('flags a password longer than 100 characters', () => {

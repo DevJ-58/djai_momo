@@ -11,12 +11,20 @@ function entry(daySeq: number, suffix = 'a', sendDay = '2026-10-16'): WhatsAppEn
     send_day: sendDay,
     email: `${suffix}@exemple.com`,
     mdp: `motdepasse-${suffix}`,
+    numero: null,
   };
 }
 
 describe('WhatsApp export formatting', () => {
   it('formats each entry as exactly three lines with its daily number', () => {
     expect(formatEntry(agentName, 1, 'test@exemple.com', 'motdepasse', '2026-10-16', '2026-10-16'))
+      .toBe('Fred Bigflo (n°1)\ntest@exemple.com\nmotdepasse');
+  });
+
+  it('adds a normalized phone after the password and leaves entries without one unchanged', () => {
+    expect(formatEntry(agentName, 1, 'test@exemple.com', 'motdepasse', '2026-10-16', '2026-10-16', '0701020304'))
+      .toBe('Fred Bigflo (n°1)\ntest@exemple.com\nmotdepasse\n0701020304');
+    expect(formatEntry(agentName, 1, 'test@exemple.com', 'motdepasse', '2026-10-16', '2026-10-16', null))
       .toBe('Fred Bigflo (n°1)\ntest@exemple.com\nmotdepasse');
   });
 

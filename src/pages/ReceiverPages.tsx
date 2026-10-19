@@ -16,6 +16,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, EmptyState } from '../components/ui';
 import { ExportPdfModal } from '../components/exports/ExportPdfModal';
+import { ExportCsvModal } from '../components/exports/ExportCsvModal';
 import { useAbidjanToday } from '../hooks/useAbidjanToday';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import {
@@ -35,6 +36,8 @@ import {
 } from '../lib/receiver-workflow';
 import { formatDailyNumber } from '../lib/registration-days';
 import { toTitleCase } from '../lib/format';
+import { formatNumeroForDisplay } from '../lib/numero';
+import { hasDescription } from '../lib/description';
 import { supabase } from '../lib/supabase';
 
 type ReceiverBlock = {
@@ -56,6 +59,7 @@ type ReceiverListFilter = 'a-faire' | 'termines' | 'tous';
 type UndoMessage = { registrationId: string; message: string };
 type ReceiverItemResponse = Record<string, unknown> & {
   prize_amount?: number | string | null;
+  description: string | null;
 };
 
 const receiverItemsKey = (agentId: string) => ['receiver-items', agentId] as const;
@@ -92,6 +96,7 @@ function normalizeReceiverItem(value: unknown): ReceiverRegistration | null {
   const sendDay = stringField(value, 'send_day');
   const email = stringField(value, 'email');
   const password = stringField(value, 'mdp', 'password');
+  const numero = typeof value.numero === 'string' ? value.numero : null;
   const daySeq = value.day_seq;
   if (!id || !agentId || !sendDay || !email || password === null || typeof daySeq !== 'number') return null;
 
@@ -116,6 +121,8 @@ function normalizeReceiverItem(value: unknown): ReceiverRegistration | null {
     day_seq: daySeq,
     email,
     mdp: password,
+    numero,
+    description: stringField(value, 'description'),
     progress_status: progressStatus,
     result,
     prize,
@@ -305,12 +312,13 @@ type RegistrationCardProps = {
   online: boolean;
   copied: boolean;
   passwordCopied: boolean;
+  numeroCopied: boolean;
   autoCopied: boolean;
   onAmountChange: (id: string, value: string) => void;
   onAmountSubmit: (id: string, trigger: ReceiverValidationTrigger) => void;
   onOutcome: (id: string, result: Exclude<ReceiverResult, 'gagne'>) => void;
   onReopen: (id: string) => void;
-  onCopy: (item: ReceiverRegistration, field: 'email' | 'mdp') => void;
+  onCopy: (item: ReceiverRegistration, field: 'email' | 'mdp' | 'numero') => void;
   onSelect: (id: string) => void;
 };
 
@@ -322,6 +330,7 @@ function RegistrationCard({
   online,
   copied,
   passwordCopied,
+  numeroCopied,
   autoCopied,
   onAmountChange,
   onAmountSubmit,
@@ -340,12 +349,16 @@ function RegistrationCard({
       : item.result === 'renonce'
         ? 'Renoncé'
         : null;
+  const descriptionId = `receiver-description-${item.id}`;
 
   return (
     <article
-      className={`receiver-registration-card glass ${complete ? 'receiver-registration-complete' : ''}`}
-      onClick={() => onSelect(item.id)}
-      onFocusCapture={() => onSelect(item.id)}
+        className={`receiver-registration-card glass ${complete ? 'receiver-registration-complete' : ''}`}
+        onClick={() => onSelect(item.id)}
+        onFocusCapture={(event) => {
+          if (event.target instanceof HTMLElement && event.target.closest('.receiver-description-toggle')) return;
+          onSelect(item.id);
+        }}
       aria-label={`${numberLabel}, ${complete ? 'terminé' : 'à traiter'}`}
     >
       <div className="receiver-registration-heading" aria-live="polite" aria-atomic="true">
@@ -359,7 +372,7 @@ function RegistrationCard({
       </div>
 
       <CredentialLine
-        label="Email"
+        label="Identifiant"
         value={item.email}
         copied={copied}
         autoCopied={autoCopied}
@@ -372,6 +385,18 @@ function RegistrationCard({
         autoCopied={false}
         onCopy={() => onCopy(item, 'mdp')}
       />
+      {item.numero !== null && (
+        <CredentialLine
+          label="Numéro"
+          value={formatNumeroForDisplay(item.numero)}
+          copied={numeroCopied}
+          autoCopied={false}
+          onCopy={() => onCopy(item, 'numero')}
+        />
+      )}
+      {hasDescription(item.description) && (
+        <ReceiverDescription id={descriptionId} description={item.description} />
+      )}
 
       {amountEnabled && (
         <div className="receiver-amount-field">
@@ -432,6 +457,54 @@ function RegistrationCard({
   );
 }
 
+function ReceiverDescription({ id, description }: { id: string; description: string }) {
+  const textRef = useRef<HTMLParagraphElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+
+  useEffect(() => {
+    const text = textRef.current;
+    if (!text) return undefined;
+
+    const measure = () => {
+      const lineHeight = Number.parseFloat(window.getComputedStyle(text).lineHeight);
+      setCanExpand(text.scrollHeight > lineHeight * 2 + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(text);
+    return () => observer.disconnect();
+  }, [description]);
+
+  return (
+    <div className="receiver-description">
+      <p
+        id={id}
+        ref={textRef}
+        className={`receiver-description-text${expanded ? ' expanded' : ''}`}
+      >
+        {description}
+      </p>
+      {canExpand && (
+        <button
+          className="receiver-description-toggle"
+          type="button"
+          aria-controls={id}
+          aria-expanded={expanded}
+          onPointerDown={(event) => event.stopPropagation()}
+          onTouchStart={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setExpanded((value) => !value);
+          }}
+        >
+          {expanded ? 'Voir moins' : 'Voir plus'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function CredentialLine({
   label,
   value,
@@ -450,7 +523,7 @@ function CredentialLine({
       <div className="receiver-credential-copy">
         <span>{label}</span>
         <code>{value}</code>
-        {autoCopied && <span className="receiver-auto-copy-feedback" role="status">Email copié ✓</span>}
+        {autoCopied && <span className="receiver-auto-copy-feedback" role="status">Identifiant copié ✓</span>}
       </div>
       <button type="button" className="receiver-copy-button" onClick={onCopy} aria-label={`Copier ${label.toLowerCase()}`}>
         {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
@@ -494,6 +567,7 @@ export function ReceiverUserPage() {
   const scrollFrameRef = useRef<number | null>(null);
   const touchStartRef = useRef<{ x: number; target: EventTarget | null } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportCsvOpen, setExportCsvOpen] = useState(false);
 
   const viewParameter = searchParams.get('vue');
   const view: ReceiverView = viewParameter === 'cartes' || viewParameter === 'liste' ? viewParameter : storedView;
@@ -696,9 +770,11 @@ export function ReceiverUserPage() {
     }
   };
 
-  const copyCredential = useCallback(async (item: ReceiverRegistration, field: 'email' | 'mdp', automatic = false) => {
+  const copyCredential = useCallback(async (item: ReceiverRegistration, field: 'email' | 'mdp' | 'numero', automatic = false) => {
     try {
-      await navigator.clipboard.writeText(item[field]);
+      const value = field === 'numero' ? item.numero : item[field];
+      if (value === null) return;
+      await navigator.clipboard.writeText(value);
       if (typeof navigator.vibrate === 'function') navigator.vibrate(25);
       if (automatic) {
         setAutoCopyFeedback((current) => ({ ...current, [item.id]: true }));
@@ -894,6 +970,7 @@ export function ReceiverUserPage() {
       online={online}
       copied={Boolean(copyFeedback[`${item.id}:email`])}
       passwordCopied={Boolean(copyFeedback[`${item.id}:mdp`])}
+      numeroCopied={Boolean(copyFeedback[`${item.id}:numero`])}
       autoCopied={Boolean(autoCopyFeedback[item.id])}
       onAmountChange={changeAmount}
       onAmountSubmit={(id, trigger) => { void submitAmount(id, trigger); }}
@@ -918,9 +995,13 @@ export function ReceiverUserPage() {
             <h1>{name}</h1>
           </div>
           <span className="receiver-progress-pill">{completedCount}/{items.length} terminés</span>
-          <Button type="button" variant="secondary" className="receiver-export-button" onClick={() => setExportOpen(true)}>
-            Exporter
-          </Button>
+          <details className="receiver-export-menu">
+            <summary>Exporter</summary>
+            <div>
+              <button type="button" onClick={() => setExportOpen(true)}>Exporter en PDF</button>
+              <button type="button" onClick={() => setExportCsvOpen(true)}>Exporter en CSV</button>
+            </div>
+          </details>
         </div>
         <div className="receiver-user-header-controls">
           <div className="receiver-view-switch" role="tablist" aria-label="Mode d’affichage">
@@ -930,7 +1011,7 @@ export function ReceiverUserPage() {
           {view === 'cartes' && (
             <label className="receiver-auto-copy-toggle">
               <input type="checkbox" checked={autoCopyEmail} onChange={(event) => showAutoCopyPreference(event.target.checked)} />
-              <span>Copie auto de l’email</span>
+              <span>Copie auto de l’identifiant</span>
             </label>
           )}
         </div>
@@ -1061,6 +1142,12 @@ export function ReceiverUserPage() {
         title={`Enregistrés de ${name}`}
         subtitle="Données fictives"
         filtersLabel="Tous les enregistrés de cet agent"
+        agentName={name}
+      />
+      <ExportCsvModal
+        open={exportCsvOpen}
+        onClose={() => setExportCsvOpen(false)}
+        filters={exportFilters}
         agentName={name}
       />
     </div>

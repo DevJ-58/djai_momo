@@ -1,4 +1,4 @@
-export const DUPLICATE_REGISTRATION_MESSAGE = 'Cet email est déjà enregistré dans votre liste.';
+export const DUPLICATE_REGISTRATION_MESSAGE = 'Cet identifiant existe déjà dans la liste de cet utilisateur.';
 
 export function registrationErrorMessage(error: unknown): string {
   const code = typeof error === 'object' && error !== null && 'code' in error
@@ -7,13 +7,21 @@ export function registrationErrorMessage(error: unknown): string {
   const message = typeof error === 'object' && error !== null && 'message' in error
     ? String(error.message).toLocaleLowerCase('fr')
     : '';
-  const details = `${code} ${message}`;
+  const details = typeof error === 'object' && error !== null
+    ? `${code} ${message} ${'details' in error ? String(error.details).toLocaleLowerCase('fr') : ''} ${'hint' in error ? String(error.hint).toLocaleLowerCase('fr') : ''}`
+    : `${code} ${message}`;
 
+  if (code === '23514' && message.includes('description')) {
+    return 'La description doit contenir entre 1 et 300 caractères.';
+  }
+  if (code === '23514' && details.includes('numero')) {
+    return 'Numéro invalide : chiffres uniquement, 4 à 20.';
+  }
   if (code === '23505') {
-    return 'Cet email existe déjà dans la liste de cet utilisateur.';
+    return 'Cet identifiant existe déjà dans la liste de cet utilisateur.';
   }
   if (code === '23514' || code === 'not_null') {
-    return 'L’email et le mot de passe sont obligatoires.';
+    return "L'identifiant et le mot de passe sont obligatoires.";
   }
   if (code === '42501') {
     return 'Action non autorisée.';

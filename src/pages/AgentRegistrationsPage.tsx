@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Check,
   Clock3,
@@ -11,12 +11,13 @@ import {
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, Card, EmptyState, Input, Skeleton, StatCard } from '../components/ui';
 import { ToastViewport } from '../components/layout/ToastViewport';
-import { RegistrationRecordList } from '../components/registrations/RegistrationRecordList';
+import { RegistrationDetails, RegistrationRecordList } from '../components/registrations/RegistrationRecordList';
 import { useToast } from '../hooks/use-toast';
 import { useMyStats } from '../hooks/useMyStats';
 import { useRegistrationById, useRegistrations } from '../hooks/useRegistrations';
 import { formatAmount, toTitleCase } from '../lib/format';
 import { useAuth } from '../hooks/useAuth';
+import { getRegistrationDetailId, updateRegistrationDetailParam } from '../lib/registration-detail-route';
 import type { RegistrationListItem, RegistrationStatus } from '../types/database';
 
 const statusFilters: Array<{ label: string; value: RegistrationStatus | null }> = [
@@ -25,6 +26,9 @@ const statusFilters: Array<{ label: string; value: RegistrationStatus | null }> 
   { label: 'Payé', value: 'paye' },
   { label: 'Refusé', value: 'refuse' },
   { label: 'Problème', value: 'probleme' },
+  { label: 'Gagné', value: 'gagne' },
+  { label: 'Échec', value: 'echec' },
+  { label: 'Renoncé', value: 'renonce' },
 ];
 
 export function AgentRegistrationsPage() {
@@ -32,12 +36,13 @@ export function AgentRegistrationsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState<RegistrationStatus | null>(null);
-  const [selected, setSelected] = useState<RegistrationListItem | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const handledDetailError = useRef('');
   const { toasts, show, dismiss } = useToast();
   const registrations = useRegistrations({ status, search: debouncedSearch.trim() });
-  const notificationRegistrationId = searchParams.get('registration') ?? '';
+  const notificationRegistrationId = getRegistrationDetailId(searchParams.toString());
   const notificationRegistration = useRegistrationById(notificationRegistrationId);
+  const selected = notificationRegistration.data ?? null;
   const stats = useMyStats();
   const items = registrations.data?.pages.flat() ?? [];
 
@@ -47,22 +52,16 @@ export function AgentRegistrationsPage() {
   }, [search]);
 
   useEffect(() => {
-    if (notificationRegistration.data) {
-      setSelected(notificationRegistration.data);
-    } else if (notificationRegistration.isError) {
-      show(notificationRegistration.error.message, 'error');
-      setSearchParams((current) => {
-        current.delete('registration');
-        return current;
-      }, { replace: true });
-    }
-  }, [
-    notificationRegistration.data,
-    notificationRegistration.error,
-    notificationRegistration.isError,
-    setSearchParams,
-    show,
-  ]);
+    if (!notificationRegistrationId || !notificationRegistration.isError) return;
+    const errorKey = `${notificationRegistrationId}:${notificationRegistration.error.message}`;
+    if (handledDetailError.current === errorKey) return;
+    handledDetailError.current = errorKey;
+    show(notificationRegistration.error.message, 'error');
+    setSearchParams(
+      updateRegistrationDetailParam(searchParams.toString(), null),
+      { replace: true },
+    );
+  }, [notificationRegistration.error, notificationRegistration.isError, notificationRegistrationId, searchParams, setSearchParams, show]);
 
   const refresh = () => {
     void registrations.refetch();
@@ -77,13 +76,10 @@ export function AgentRegistrationsPage() {
   };
 
   const selectRegistration = (registration: RegistrationListItem | null) => {
-    setSelected(registration);
-    if (!registration && searchParams.has('registration')) {
-      setSearchParams((current) => {
-        current.delete('registration');
-        return current;
-      }, { replace: true });
-    }
+    setSearchParams(
+      updateRegistrationDetailParam(searchParams.toString(), registration?.id ?? null),
+      { replace: true },
+    );
   };
 
   return (
@@ -163,11 +159,11 @@ export function AgentRegistrationsPage() {
         <div className="registration-filters">
           <Input
             className="registration-search"
-            label="Rechercher par e-mail"
+            label="Rechercher par identifiant ou numéro"
             type="search"
             inputMode="email"
             autoComplete="off"
-            placeholder="Saisissez un e-mail"
+            placeholder="Identifiant ou numéro"
             icon={<Search size={18} aria-hidden="true" />}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -179,10 +175,7 @@ export function AgentRegistrationsPage() {
                 type="button"
                 key={filter.label}
                 aria-pressed={status === filter.value}
-                onClick={() => {
-                  setStatus(filter.value);
-                  setSelected(null);
-                }}
+                onClick={() => setStatus(filter.value)}
               >
                 {filter.label}
               </button>
@@ -209,7 +202,7 @@ export function AgentRegistrationsPage() {
               action={<Button variant="secondary" onClick={() => void registrations.refetch()}>Réessayer</Button>}
             />
           </Card>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !selected && !notificationRegistration.isPending ? (
           <Card className="registration-empty">
             <EmptyState
               icon={<Inbox size={23} aria-hidden="true" />}
@@ -225,12 +218,20 @@ export function AgentRegistrationsPage() {
         ) : (
           <RegistrationRecordList
             items={items}
-            selected={selected}
+            selected={null}
             onSelect={selectRegistration}
             readOnly
             show={show}
           />
         )}
+
+        <RegistrationDetails
+          registration={selected}
+          loading={Boolean(notificationRegistrationId && notificationRegistration.isPending)}
+          onClose={() => selectRegistration(null)}
+          allowAgentCorrectionRequests={false}
+          show={show}
+        />
 
         {registrations.hasNextPage && (
           <div className="load-more-wrap">

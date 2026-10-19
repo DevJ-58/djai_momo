@@ -19,7 +19,7 @@ import { Avatar, Badge, Button, Card, EmptyState, Input, Modal, Skeleton, StatCa
 import type { StatusKind } from '../types/ui';
 import { APP_NAME } from '../lib/brand';
 
-const statuses: StatusKind[] = ['en_attente', 'paye', 'refuse', 'probleme'];
+const statuses: StatusKind[] = ['en_attente', 'paye', 'refuse', 'probleme', 'gagne', 'echec', 'renonce'];
 
 export function DesignSystemPage() {
   const [modalOpen, setModalOpen] = useState(false);

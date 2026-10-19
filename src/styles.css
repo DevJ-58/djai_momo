@@ -169,6 +169,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .status-paye { color: var(--paye-ink); background: var(--paye-background); }
 .status-refuse { color: var(--refuse-ink); background: var(--refuse-background); }
 .status-probleme { color: var(--probleme-ink); background: var(--probleme-background); }
+.status-gagne { color: #15803D; background: #DCFCE7; }
+.status-echec { color: #F43F5E; background: #FFE4E6; }
+.status-renonce { color: #57534E; background: #E7E5E4; }
 .avatar { display: inline-grid; flex: 0 0 auto; place-items: center; border-radius: 50%; color: var(--primary-icon); background: var(--surface-soft); font-weight: 800; border: 2px solid var(--glass-border-strong); }
 .avatar-small { width: 36px; height: 36px; font-size: 14px; }
 .avatar-medium { width: 44px; height: 44px; font-size: 14px; }
@@ -476,6 +479,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .registration-card-topline .status-badge { flex: 0 0 auto; }
 .registration-number { display: inline-flex; width: fit-content; align-items: center; padding: 5px 10px; border-radius: 999px; color: var(--primary-icon); background: var(--surface-soft); font-size: 13px; font-weight: 800; white-space: nowrap; }
 .registration-card-email { display: block; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.registration-card-numero { min-width: 0; color: var(--muted); font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 13px; overflow-wrap: anywhere; }
 .registration-card-bottomline { color: var(--muted); font-size: 13px; }
 .registration-card-bottomline > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .registration-card-bottomline time { text-align: right; }
@@ -505,6 +509,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .registration-detail-label { color: var(--muted); font-size: 13px; font-weight: 700; }
 .registration-detail-field-content { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
 .registration-detail-value { min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.registration-reset-export-checkbox { display: flex; align-items: flex-start; gap: 9px; color: var(--ink); font-size: 13px; line-height: 1.4; }
+.registration-reset-export-checkbox input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: var(--primary-icon); }
+.registration-description-text { min-width: 0; margin: 0; color: var(--ink); font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.registration-description-input { width: 100%; min-height: 84px; resize: none; }
+.registration-awaiting-confirmation { margin: -12px 0 0; color: var(--muted); font-size: 12px; }
+.receiver-result-section { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--divider); }
+.receiver-result-section h3 { margin: 0; font-size: 15px; }
+.receiver-result-content { display: grid; justify-items: start; gap: 8px; color: var(--muted); font-size: 13px; }
+.receiver-result-content p { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.receiver-confirmation-note { color: var(--muted); font-size: 12px; }
+.registration-confirm-payment { min-height: 48px; }
 .registration-password-value { font-family: ui-monospace, 'Cascadia Code', monospace; }
 .registration-password-actions { display: flex; flex: 0 0 auto; gap: 2px; }
 .copy-field-button { min-height: 40px; gap: 5px; padding: 0 8px; font-size: 12px; }
@@ -568,6 +583,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (min-width: 768px) {
   .paste-entry-list { gap: 0; overflow-x: auto; border: 1px solid var(--divider); border-radius: 14px; }
   .paste-entry-header, .paste-entry { display: grid; grid-template-columns: minmax(82px, .6fr) minmax(180px, 1.25fr) minmax(180px, 1.25fr) minmax(145px, 1fr); align-items: center; gap: 12px; }
+  .paste-entry-header.has-numero, .paste-entry.has-numero { grid-template-columns: minmax(74px, .55fr) minmax(115px, 1.1fr) minmax(115px, 1.1fr) minmax(100px, .9fr) minmax(110px, 1fr); }
   .paste-entry-header { min-height: 44px; padding: 8px 12px; color: var(--muted); background: rgba(255, 243, 196, .62); font-size: 12px; font-weight: 800; }
   .paste-entry { border: 0; border-radius: 0; border-top: 1px solid var(--divider); padding: 12px; }
   .paste-mobile-label { display: none; }
@@ -655,6 +671,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .distribution-paye { background: var(--paye); }
 .distribution-refuse { background: var(--refuse); }
 .distribution-probleme { background: var(--probleme); }
+.distribution-gagne { background: #34D399; }
+.distribution-echec { background: #F43F5E; }
+.distribution-renonce { background: #A8A29E; }
+.admin-unconfirmed-summary { display: flex; min-height: 56px; align-items: center; gap: 10px; margin-top: 14px; padding: 14px 18px; color: var(--primary-text); font-size: 14px; font-weight: 700; }
+.admin-unconfirmed-summary > svg { flex: 0 0 auto; }
 .admin-distribution-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 8px; margin-top: 18px; }
 .admin-distribution-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: center; gap: 6px; min-width: 0; color: var(--muted); font-size: 11px; }
 .admin-distribution-item strong { color: var(--ink); font-size: 12px; }
@@ -848,6 +869,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .registration-note-input { min-height: 84px; resize: vertical; }
 .registration-status-select:focus-visible, .registration-note-input:focus-visible { border-color: var(--primary-text); outline: 3px solid var(--focus-outline); outline-offset: 1px; }
 .registration-note-count { color: var(--muted); font-size: 11px; text-align: right; }
+.add-registration-description-field { display: grid; gap: 6px; min-width: 0; }
+.receiver-description { display: grid; gap: 2px; min-width: 0; }
+.receiver-description-text { display: -webkit-box; min-width: 0; margin: 0; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.receiver-description-text.expanded { display: block; overflow: visible; }
+.receiver-description-toggle { justify-self: start; min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; padding: 0 8px; color: var(--primary-text); background: transparent; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; touch-action: pan-y; }
+.receiver-description-toggle:focus-visible { outline: 3px solid var(--focus-outline); outline-offset: 1px; }
 .registration-status-submit { width: 100%; }
 .registration-form-error { margin: 0; color: var(--error-ink); font-size: 12px; line-height: 1.45; }
 .registration-history { display: grid; gap: 12px; margin-top: 8px; }
@@ -883,6 +910,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .agent-notifications-mark-all { min-height: 36px; justify-content: flex-start; padding: 0; font-size: 12px; }
 .agent-notifications-list { display: grid; gap: 5px; overflow-y: auto; margin: 0; padding: 8px; list-style: none; }
 .agent-notification-item { display: flex; width: 100%; min-width: 0; align-items: flex-start; gap: 9px; border: 0; border-radius: 13px; padding: 11px; color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.agent-notification-item { min-height: 56px; }
+.agent-notification-type-icon { flex: 0 0 auto; margin-top: 2px; color: var(--primary-icon); }
+.agent-notification-copy .status-badge { width: fit-content; min-height: 26px; padding: 3px 9px; font-size: 11px; }
 .agent-notification-item:hover, .agent-notification-unread { background: var(--soft-primary); }
 .agent-notification-dot { flex: 0 0 auto; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--primary-hover); }
 .agent-notification-copy { display: grid; min-width: 0; gap: 5px; overflow-wrap: anywhere; font-size: 13px; line-height: 1.45; }
@@ -902,6 +932,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 767px) {
   .agent-notifications-mobile { display: contents; }
   .agent-notifications-panel-mobile { left: 12px; width: calc(100vw - 24px); }
+}
+
+@media (max-width: 639px) {
+  .registration-details-backdrop { align-items: stretch; padding: 0; }
+  .registration-detail-modal { width: 100%; height: 100dvh; max-height: 100dvh; padding: max(14px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); border-radius: 0; }
+  .registration-detail-modal .modal-heading { position: sticky; top: 0; z-index: 2; padding: 4px 0 12px; background: var(--canvas); }
+  .registration-detail-modal .modal-heading .icon-button { width: 48px; min-width: 48px; min-height: 48px; }
+  .status-filter-confirmation { border-color: var(--primary); color: var(--primary-text); }
 }
 
 .admin-user-header-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
@@ -1079,6 +1117,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .receiver-progress-pill { flex: 0 0 auto; min-height: 40px; white-space: nowrap; }
 .receiver-export-button { flex: 0 0 auto; min-height: 48px; padding: 0 12px; }
+.receiver-export-menu { position: relative; flex: 0 0 auto; }
+.receiver-export-menu summary { display: grid; min-height: 48px; place-items: center; padding: 0 12px; border: 1px solid var(--primary-border); border-radius: 14px; background: var(--white-surface); color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.receiver-export-menu summary::-webkit-details-marker { display: none; }
+.receiver-export-menu > div { position: absolute; z-index: 30; top: calc(100% + 5px); right: 0; min-width: 170px; padding: 5px; border: 1px solid var(--glass-border-strong); border-radius: 13px; background: var(--glass-fallback); box-shadow: var(--shadow-raised); }
+.receiver-export-menu > div button { width: 100%; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.receiver-export-menu > div button:hover { background: var(--surface-soft); }
 .receiver-user-header-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .receiver-view-switch {
   display: inline-flex;

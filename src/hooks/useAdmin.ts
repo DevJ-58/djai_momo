@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { adminErrorMessage } from '../lib/admin-errors';
 import { adminDeletionErrorMessage } from '../lib/admin-deletion-errors';
+import { registrationSearchFilter } from '../lib/registration-search';
 import { registrationListKey, registrationStatsKey } from './useRegistrations';
 import { notificationsKey, unreadNotificationsCountKey } from './useNotifications';
 import type {
@@ -15,6 +16,7 @@ import type {
   AgentOverview,
   DailyPoint,
   RegistrationFilters,
+  RegistrationListItem,
   RegistrationWithAgent,
   RecentRegistration,
 } from '../types/database';
@@ -28,6 +30,7 @@ export const agentsOverviewKey = ['admin', 'agents'] as const;
 export const dailyRegistrationsKey = ['admin', 'daily-registrations'] as const;
 export const recentRegistrationsKey = ['admin', 'recent-registrations'] as const;
 export const adminRegistrationsKey = ['admin', 'registrations'] as const;
+export const unconfirmedReceiverResultsKey = ['admin', 'unconfirmed-receiver-results'] as const;
 export const agentExportCountsKey = ['admin', 'agent-export-counts'] as const;
 export const agentProfileKey = (agentId: string) => ['admin', 'agent-profile', agentId] as const;
 export const agentRegistrationsKey = (agentId: string, filters: RegistrationFilters) => (
@@ -164,6 +167,40 @@ export function useAdminStats() {
   });
 }
 
+export function useUnconfirmedReceiverResults() {
+  return useQuery({
+    queryKey: unconfirmedReceiverResultsKey,
+    queryFn: async () => {
+      const pageSize = 1000;
+      let count = 0;
+      let totalAmount = 0;
+      let echec = 0;
+      let renonce = 0;
+      for (let page = 0; ; page += 1) {
+        const { data, error } = await supabase
+          .from('registrations')
+          .select('status, amount')
+          .in('status', ['gagne', 'echec', 'renonce'])
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+          .returns<Array<Pick<RegistrationListItem, 'status' | 'amount'>>>();
+        if (error) throw new Error(adminErrorMessage(error));
+        for (const row of data) {
+          if (row.status === 'gagne') {
+            count += 1;
+            totalAmount += row.amount ?? 0;
+          } else if (row.status === 'echec') {
+            echec += 1;
+          } else if (row.status === 'renonce') {
+            renonce += 1;
+          }
+        }
+        if (data.length < pageSize) return { count, totalAmount, echec, renonce };
+      }
+    },
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useAgentsOverview() {
   return useQuery({
     queryKey: agentsOverviewKey,
@@ -206,7 +243,7 @@ export function useRecentRegistrations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('registrations')
-        .select('id, agent_id, seq, send_day, day_seq, email, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
+        .select('id, agent_id, seq, send_day, day_seq, email, numero, description, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
         .order('created_at', { ascending: false })
         .limit(8)
         .returns<RecentRegistration[]>();
@@ -243,7 +280,7 @@ export function useAdminRegistrationById(registrationId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('registrations')
-        .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
+        .select('id, agent_id, seq, send_day, day_seq, email, mdp, numero, description, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
         .eq('id', registrationId)
         .maybeSingle()
         .returns<RegistrationWithAgent | null>();
@@ -263,12 +300,12 @@ export function useAgentRegistrations(agentId: string, { status, search }: Regis
     queryFn: async ({ pageParam }) => {
       let query = supabase
         .from('registrations')
-        .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
+        .select('id, agent_id, seq, send_day, day_seq, email, mdp, numero, description, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles(full_name)')
         .eq('agent_id', agentId)
         .order('created_at', { ascending: false });
 
       if (status) query = query.eq('status', status);
-      if (search) query = query.ilike('email', `%${search}%`);
+      if (search) query = query.or(registrationSearchFilter(search));
 
       const { data, error } = await query
         .range(pageParam * PAGE_SIZE, pageParam * PAGE_SIZE + PAGE_SIZE - 1)
@@ -305,14 +342,14 @@ export function useAdminRegistrations({
       if (correctionsOnly && correctionRegistrationIds?.length === 0) return [];
       let query = supabase
         .from('registrations')
-        .select('id, agent_id, seq, send_day, day_seq, email, mdp, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
+        .select('id, agent_id, seq, send_day, day_seq, email, mdp, numero, description, status, amount, admin_note, confirmed_at, exported_at, created_at, profiles!inner(full_name, whatsapp)')
         .order('created_at', { ascending: false });
 
       if (correctionsOnly && correctionRegistrationIds) {
         query = query.in('id', correctionRegistrationIds);
       }
       if (status) query = query.eq('status', status);
-      if (search) query = query.ilike('email', `%${search}%`);
+      if (search) query = query.or(registrationSearchFilter(search));
       if (agentName) query = query.ilike('profiles.full_name', `%${agentName}%`);
       if (agentId) query = query.eq('agent_id', agentId);
       if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00Z`);

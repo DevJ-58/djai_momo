@@ -12,12 +12,12 @@ export const correctionRequestsKey = (registrationId: string) => (
 );
 export const openCorrectionRegistrationIdsKey = ['admin', 'open-correction-registration-ids'] as const;
 
-export function useRegistrationCorrectionRequests(registrationId: string) {
+export function useRegistrationCorrectionRequests(registrationId: string, enabled = true) {
   const { profile } = useAuth();
 
   return useQuery({
     queryKey: correctionRequestsKey(registrationId),
-    enabled: Boolean(registrationId && profile?.id),
+    enabled: Boolean(enabled && registrationId && profile?.id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('correction_requests')

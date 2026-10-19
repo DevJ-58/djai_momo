@@ -1,3 +1,5 @@
-export type StatusKind = 'en_attente' | 'paye' | 'refuse' | 'probleme';
+import type { RegistrationStatus } from './database';
+
+export type StatusKind = RegistrationStatus;
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';

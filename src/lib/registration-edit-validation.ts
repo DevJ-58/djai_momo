@@ -1,14 +1,21 @@
 import { z } from 'zod';
+import { identifierSchema } from './parseIdentifier';
+import { optionalNumeroSchema } from './numero';
+import { descriptionSchema } from './description';
 
 export const registrationUpdateInfoSchema = z.object({
-  email: z.string().trim().email('L’e-mail est invalide.').max(254, 'L’e-mail ne peut pas dépasser 254 caractères.').optional(),
+  email: identifierSchema.optional(),
   mdp: z.string().trim().min(1, 'Le mot de passe est obligatoire.').max(100, 'Le mot de passe ne peut pas dépasser 100 caractères.').optional(),
+  numero: optionalNumeroSchema,
+  description: descriptionSchema,
   exported_at: z.string().nullable().optional(),
-}).refine((value) => value.email !== undefined || value.mdp !== undefined || value.exported_at !== undefined, {
+}).refine((value) => value.email !== undefined || value.mdp !== undefined || value.numero !== undefined || value.description !== undefined || value.exported_at !== undefined, {
   message: 'Choisissez au moins un champ à modifier.',
 }).transform((value) => ({
   ...(value.email !== undefined ? { email: value.email.trim() } : {}),
   ...(value.mdp !== undefined ? { mdp: value.mdp.trim() } : {}),
+  ...(value.numero !== undefined ? { numero: value.numero } : {}),
+  ...(value.description !== undefined ? { description: value.description } : {}),
   ...(value.exported_at !== undefined ? { exported_at: value.exported_at } : {}),
 }));
 
