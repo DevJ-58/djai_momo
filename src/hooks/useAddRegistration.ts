@@ -8,6 +8,7 @@ import {
 import { DESCRIPTION_TOO_LONG_MESSAGE, parseDescription } from '../lib/description';
 import { supabase } from '../lib/supabase';
 import type { Registration } from '../types/database';
+import { gainsDailyKey, gainsSummaryKey } from './useGains';
 
 type AddRegistrationInput = {
   email: string;
@@ -72,6 +73,8 @@ export function useAddRegistration() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: registrationListKey }),
         queryClient.invalidateQueries({ queryKey: registrationStatsKey }),
+        queryClient.invalidateQueries({ queryKey: gainsSummaryKey }),
+        queryClient.invalidateQueries({ queryKey: gainsDailyKey }),
       ]);
     },
   });

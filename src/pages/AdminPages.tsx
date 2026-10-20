@@ -63,6 +63,8 @@ import { generateAgentsSummaryPdf } from '../lib/exports/pdf';
 import { formatDailyNumber } from '../lib/registration-days';
 import { formatNumeroForDisplay } from '../lib/numero';
 import { getRegistrationDetailId, updateRegistrationDetailParam } from '../lib/registration-detail-route';
+import { useGainsSummary } from '../hooks/useGains';
+import { formatGain } from '../lib/gains';
 
 const statusItems: Array<{ status: RegistrationStatus; label: string }> = [
   { status: 'en_attente', label: 'En attente' },
@@ -81,11 +83,12 @@ export function AdminDashboardPage() {
   const agents = useAgentsOverview();
   const daily = useDailyRegistrations(14);
   const recent = useRecentRegistrations();
+  const gains = useGainsSummary({});
   const today = useAbidjanToday();
   const [activeDay, setActiveDay] = useState<number | null>(null);
 
   const refresh = () => {
-    void Promise.all([stats.refetch(), unconfirmedResults.refetch(), agents.refetch(), daily.refetch(), recent.refetch()]);
+    void Promise.all([stats.refetch(), unconfirmedResults.refetch(), agents.refetch(), daily.refetch(), recent.refetch(), gains.refetch()]);
   };
   const topAgents = [...(agents.data ?? [])]
     .sort((first, second) => second.total - first.total)
@@ -103,7 +106,7 @@ export function AdminDashboardPage() {
           variant="ghost"
           className="refresh-button"
           onClick={refresh}
-          disabled={stats.isFetching || unconfirmedResults.isFetching || agents.isFetching || daily.isFetching || recent.isFetching}
+          disabled={stats.isFetching || unconfirmedResults.isFetching || agents.isFetching || daily.isFetching || recent.isFetching || gains.isFetching}
           aria-label="Actualiser le tableau de bord"
           title="Actualiser"
         >
@@ -150,6 +153,14 @@ export function AdminDashboardPage() {
           </>
         )}
       </section>
+      <Link className="admin-dashboard-gains-link" to="/admin/gains">
+        <StatCard
+          label="Gains : Montant net"
+          value={gains.isPending ? 'Chargement…' : gains.isError ? 'Indisponible' : formatGain((gains.data ?? []).reduce((sum, row) => sum + row.montant_net, 0))}
+          description="Voir le classement et les détails"
+          icon={<Wallet size={20} aria-hidden="true" />}
+        />
+      </Link>
       <Card className="admin-unconfirmed-summary">
         {unconfirmedResults.isPending ? (
           <span role="status">Chargement des gains à confirmer…</span>

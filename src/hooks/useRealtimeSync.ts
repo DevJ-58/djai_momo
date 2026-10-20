@@ -14,6 +14,7 @@ import {
 } from './useAdmin';
 import { registrationListKey, registrationStatsKey } from './useRegistrations';
 import { dayRegistrationsKey, reportDayStatsKey } from './useDayReports';
+import { gainsDailyKey, gainsSummaryKey } from './useGains';
 
 export function useRealtimeSync() {
   const { profile } = useAuth();
@@ -31,6 +32,8 @@ export function useRealtimeSync() {
         void queryClient.invalidateQueries({ queryKey: reportDayStatsKey });
         void queryClient.invalidateQueries({ queryKey: dayRegistrationsKey });
         void queryClient.invalidateQueries({ queryKey: ['earliest-report-day'] });
+        void queryClient.invalidateQueries({ queryKey: gainsSummaryKey });
+        void queryClient.invalidateQueries({ queryKey: gainsDailyKey });
       }, 1000);
     };
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, CircleUserRound, ClipboardList, LayoutDashboard, LogOut, Plus, Sparkles, Users } from 'lucide-react';
+import { CalendarDays, CircleUserRound, ClipboardList, Ellipsis, LayoutDashboard, LogOut, Plus, Sparkles, Users, Wallet } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
@@ -12,25 +12,29 @@ import { Avatar, Button, Logo } from '../ui';
 import { ProfileModal } from '../profile/ProfileModal';
 import { ToastViewport } from './ToastViewport';
 import { APP_NAME } from '../../lib/brand';
+import { Modal } from '../ui';
 
 type NavigationItem = {
   label: string;
   mobileLabel: string;
   to: string;
   icon: typeof LayoutDashboard;
+  mobileHidden?: boolean;
 };
 
 const adminNavigation: NavigationItem[] = [
   { label: 'Tableau de bord', mobileLabel: 'Tableau', to: '/admin', icon: LayoutDashboard },
   { label: 'Utilisateurs', mobileLabel: 'Agents', to: '/admin/utilisateurs', icon: Users },
-  { label: 'Enregistrés', mobileLabel: 'Liste', to: '/admin/enregistres', icon: ClipboardList },
+  { label: 'Enregistrés', mobileLabel: 'Liste', to: '/admin/enregistres', icon: ClipboardList, mobileHidden: true },
   { label: 'Jours', mobileLabel: 'Jours', to: '/admin/jours', icon: CalendarDays },
+  { label: 'Gains', mobileLabel: 'Gains', to: '/admin/gains', icon: Wallet, mobileHidden: true },
 ];
 
 const agentNavigation: NavigationItem[] = [
   { label: 'Mes enregistrés', mobileLabel: 'Liste', to: '/espace', icon: ClipboardList },
   { label: 'Ajouter', mobileLabel: 'Ajouter', to: '/espace/ajouter', icon: Plus },
   { label: 'Mes jours', mobileLabel: 'Jours', to: '/espace/jours', icon: CalendarDays },
+  { label: 'Mes gains', mobileLabel: 'Gains', to: '/espace/gains', icon: Wallet },
 ];
 
 export function AppShell() {
@@ -40,6 +44,7 @@ export function AppShell() {
   useRealtimeSync();
   const queryClient = useQueryClient();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const { toasts, show, dismiss } = useToast();
@@ -184,7 +189,7 @@ export function AppShell() {
         <Outlet />
       </main>
       <nav className="mobile-nav glass" aria-label="Navigation principale">
-        {navigation.map(({ label, mobileLabel, to, icon: Icon }) => (
+        {navigation.filter(({ mobileHidden }) => !mobileHidden).map(({ label, mobileLabel, to, icon: Icon }) => (
           <BottomNavItem
             key={to}
             icon={<Icon size={24} aria-hidden="true" />}
@@ -195,6 +200,16 @@ export function AppShell() {
             end={to === '/admin'}
           />
         ))}
+        {role === 'admin' && <BottomNavItem
+          icon={<Ellipsis size={24} aria-hidden="true" />}
+          label="Plus"
+          accessibleLabel="Pages supplémentaires"
+          title="Pages supplémentaires"
+          active={moreOpen}
+          onClick={() => setMoreOpen(true)}
+          ariaHasPopup="dialog"
+          ariaExpanded={moreOpen}
+        />}
         {(role === 'agent' || role === 'admin') && <NotificationBell placement="mobile" />}
         {profile && (
           <BottomNavItem
@@ -209,6 +224,12 @@ export function AppShell() {
           />
         )}
       </nav>
+      {role === 'admin' && <Modal open={moreOpen} title="Pages supplémentaires" onClose={() => setMoreOpen(false)} className="mobile-more-modal">
+        <nav className="mobile-more-links" aria-label="Pages administrateur">
+          <Link className="mobile-more-link" to="/admin/enregistres" onClick={() => setMoreOpen(false)}><ClipboardList size={20} aria-hidden="true" /> Enregistrés</Link>
+          <Link className="mobile-more-link" to="/admin/gains" onClick={() => setMoreOpen(false)}><Wallet size={20} aria-hidden="true" /> Gains</Link>
+        </nav>
+      </Modal>}
       {profile && (
         <ProfileModal
           open={profileOpen}

@@ -3,6 +3,7 @@ import { useAuth } from './useAuth';
 import { registrationListKey, registrationStatsKey } from './useRegistrations';
 import { DUPLICATE_REGISTRATION_MESSAGE, registrationErrorMessage } from '../lib/registration-errors';
 import { insertRegistration } from './useAddRegistration';
+import { gainsDailyKey, gainsSummaryKey } from './useGains';
 import type { ParsedEntry } from '../lib/parseCredentials';
 
 export type BatchRegistrationResult = {
@@ -117,6 +118,8 @@ export function useAddRegistrationsBatch() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: registrationListKey }),
         queryClient.invalidateQueries({ queryKey: registrationStatsKey }),
+        queryClient.invalidateQueries({ queryKey: gainsSummaryKey }),
+        queryClient.invalidateQueries({ queryKey: gainsDailyKey }),
       ]);
     },
   });

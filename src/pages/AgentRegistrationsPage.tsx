@@ -7,6 +7,7 @@ import {
   Search,
   UsersRound,
   Wallet,
+  Coins,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, Card, EmptyState, Input, Skeleton, StatCard } from '../components/ui';
@@ -18,6 +19,8 @@ import { useRegistrationById, useRegistrations } from '../hooks/useRegistrations
 import { formatAmount, toTitleCase } from '../lib/format';
 import { useAuth } from '../hooks/useAuth';
 import { getRegistrationDetailId, updateRegistrationDetailParam } from '../lib/registration-detail-route';
+import { useGainsSummary } from '../hooks/useGains';
+import { computeGains, formatGain } from '../lib/gains';
 import type { RegistrationListItem, RegistrationStatus } from '../types/database';
 
 const statusFilters: Array<{ label: string; value: RegistrationStatus | null }> = [
@@ -44,6 +47,9 @@ export function AgentRegistrationsPage() {
   const notificationRegistration = useRegistrationById(notificationRegistrationId);
   const selected = notificationRegistration.data ?? null;
   const stats = useMyStats();
+  const gains = useGainsSummary({});
+  const gainsNet = gains.data?.reduce((sum, row) => sum + row.montant_net, 0) ?? 0;
+  const ownGains = computeGains(gainsNet);
   const items = registrations.data?.pages.flat() ?? [];
 
   useEffect(() => {
@@ -66,6 +72,7 @@ export function AgentRegistrationsPage() {
   const refresh = () => {
     void registrations.refetch();
     void stats.refetch();
+    void gains.refetch();
   };
 
   const hasActiveFilters = Boolean(search.trim() || status);
@@ -95,7 +102,7 @@ export function AgentRegistrationsPage() {
             variant="ghost"
             className="refresh-button"
             onClick={refresh}
-            disabled={registrations.isFetching || stats.isFetching}
+            disabled={registrations.isFetching || stats.isFetching || gains.isFetching}
             aria-label="Actualiser la liste"
             title="Actualiser"
           >
@@ -147,6 +154,16 @@ export function AgentRegistrationsPage() {
           <Button variant="ghost" onClick={() => void stats.refetch()}>Réessayer</Button>
         </div>
       )}
+
+      <Link className="agent-gains-summary glass" to="/espace/gains" aria-label={gains.isError
+        ? 'Mes gains : indisponibles'
+        : `Mes gains : net ${formatGain(ownGains.net)}, Vp ${formatGain(ownGains.vp)}, reçu ${formatGain(ownGains.recu)}`}>
+        <span className="agent-gains-summary-icon"><Coins size={20} aria-hidden="true" /></span>
+        <span className="agent-gains-summary-copy"><strong>Mes gains</strong><span>{gains.isError
+          ? 'Indisponible'
+          : `Net ${formatGain(ownGains.net)} · Vp ${formatGain(ownGains.vp)} · Reçu ${formatGain(ownGains.recu)}`}</span></span>
+        {gains.isPending && <span className="sr-only" role="status">Chargement des gains…</span>}
+      </Link>
 
       <section className="registration-list-section" aria-labelledby="registration-list-title">
         <div className="registration-list-heading">

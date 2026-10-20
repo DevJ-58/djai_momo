@@ -6,6 +6,7 @@ import { registrationHistoryKey } from './useRegistrationHistory';
 import { registrationErrorMessage } from '../lib/registration-errors';
 import { updateRegistrationInfoSchema, type RegistrationUpdateInfoInput } from '../lib/registration-edit-validation';
 import { registrationAuditKey } from './useAuditLog';
+import { gainsDailyKey, gainsSummaryKey } from './useGains';
 
 export function useUpdateRegistrationInfo() {
   const queryClient = useQueryClient();
@@ -42,6 +43,8 @@ export function useUpdateRegistrationInfo() {
         queryClient.invalidateQueries({ queryKey: recentRegistrationsKey }),
         queryClient.invalidateQueries({ queryKey: registrationHistoryKey(registrationId) }),
         queryClient.invalidateQueries({ queryKey: registrationAuditKey(registrationId) }),
+        queryClient.invalidateQueries({ queryKey: gainsSummaryKey }),
+        queryClient.invalidateQueries({ queryKey: gainsDailyKey }),
       ]);
     },
   });

@@ -1,6 +1,8 @@
 import { formatAmount, formatDate, toTitleCase } from '../format';
 import type { AgentOverview, RegistrationExportRow, RegistrationStatus } from '../../types/database';
 import { APP_NAME } from '../brand';
+import { computeGains, formatGain, formatGainDay, type GainsDailyRow, type GainsSummaryRow } from '../gains';
+import { getAbidjanToday } from '../registration-days';
 
 const STATUS_LABELS: Record<RegistrationStatus, string> = {
   en_attente: 'En attente',
@@ -264,6 +266,108 @@ export async function generateAgentsSummaryPdf({ rows }: { rows: AgentOverview[]
   });
   addFooter(doc);
   doc.save(`${APP_NAME}_utilisateurs_${fileDate()}.pdf`);
+}
+
+export type GenerateGainsPdfOptions = {
+  rows: GainsSummaryRow[];
+  daily: GainsDailyRow[];
+  periodLabel: string;
+  totals: { net: number; count: number };
+  includeDaily: boolean;
+};
+
+export async function generateGainsPdf(options: GenerateGainsPdfOptions): Promise<void> {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  let logoDataUrl: string | null = null;
+  try {
+    logoDataUrl = await loadLogoDataUrl();
+  } catch (error) {
+    console.warn('Le logo ne peut pas être ajouté au PDF ; le nom de marque sera affiché à la place.', error);
+  }
+
+  const totalAmounts = computeGains(options.totals.net);
+  const stats = [
+    ['Montant net', formatGain(totalAmounts.net)],
+    ['Montant Vp', formatGain(totalAmounts.vp)],
+    ['Montant reçu', formatGain(totalAmounts.recu)],
+  ];
+  const boxWidth = (210 - 28 - 6) / 3;
+  stats.forEach(([label, value], index) => {
+    const x = 14 + index * (boxWidth + 3);
+    doc.setFillColor(255, 251, 235);
+    doc.setDrawColor(255, 229, 138);
+    doc.roundedRect(x, 44, boxWidth, 18, 2, 2, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 100, 100);
+    doc.text(sanitizePdfText(label), x + 2, 50);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(28, 25, 23);
+    doc.text(sanitizePdfText(value), x + 2, 57);
+  });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text(sanitizePdfText(`${options.totals.count} enregistrés ayant reçu`), 14, 67);
+
+  autoTableModule.default(doc, {
+    startY: 72,
+    head: [['Utilisateur', 'Enregistrés', 'Net', 'Vp', 'Reçu']],
+    body: options.rows.map((row) => {
+      const values = computeGains(row.montant_net);
+      return [
+        sanitizePdfText(toTitleCase(row.full_name)),
+        String(row.nb_recus),
+        sanitizePdfText(formatGain(values.net).replace(/[\u00A0\u202F]/g, ' ')),
+        sanitizePdfText(formatGain(values.vp).replace(/[\u00A0\u202F]/g, ' ')),
+        sanitizePdfText(formatGain(values.recu).replace(/[\u00A0\u202F]/g, ' ')),
+      ];
+    }),
+    margin: { top: 44, right: 14, bottom: 19, left: 14 },
+    willDrawPage: () => drawHeader(doc, 'Gains', options.periodLabel, logoDataUrl),
+    styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, overflow: 'linebreak', textColor: [28, 25, 23] },
+    headStyles: { fillColor: [255, 201, 60], textColor: [31, 23, 0], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [255, 251, 235] },
+    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+  });
+
+  if (options.includeDaily && options.daily.length > 0) {
+    const lastTable = (doc as typeof doc & { lastAutoTable?: { finalY: number } }).lastAutoTable;
+    const nextY = (lastTable?.finalY ?? 72) + 12;
+    if (nextY > doc.internal.pageSize.getHeight() - 32) doc.addPage();
+    const startY = nextY > doc.internal.pageSize.getHeight() - 32 ? 44 : nextY;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(28, 25, 23);
+    doc.text('Détail par jour', 14, startY - 4);
+    autoTableModule.default(doc, {
+      startY,
+      head: [['Jour', 'Enregistrés ayant reçu', 'Net', 'Vp', 'Reçu']],
+      body: options.daily.map((row) => {
+        const values = computeGains(row.montant_net);
+        return [
+          sanitizePdfText(formatGainDay(row.jour)),
+          String(row.nb_recus),
+          sanitizePdfText(formatGain(values.net).replace(/[\u00A0\u202F]/g, ' ')),
+          sanitizePdfText(formatGain(values.vp).replace(/[\u00A0\u202F]/g, ' ')),
+          sanitizePdfText(formatGain(values.recu).replace(/[\u00A0\u202F]/g, ' ')),
+        ];
+      }),
+      margin: { top: 44, right: 14, bottom: 19, left: 14 },
+      willDrawPage: () => drawHeader(doc, 'Gains', options.periodLabel, logoDataUrl),
+      styles: { font: 'helvetica', fontSize: 8, cellPadding: 2, overflow: 'linebreak', textColor: [28, 25, 23] },
+      headStyles: { fillColor: [255, 201, 60], textColor: [31, 23, 0], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [255, 251, 235] },
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    });
+  }
+  addFooter(doc);
+  doc.save(`${APP_NAME}_gains_${getAbidjanToday()}.pdf`);
 }
 
 export function registrationStatusPdfLabel(status: RegistrationStatus): string {

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminRegistrationsKey, adminStatsKey, agentsOverviewKey, dailyRegistrationsKey, recentRegistrationsKey, unconfirmedReceiverResultsKey } from './useAdmin';
 import { registrationListKey, registrationStatsKey } from './useRegistrations';
 import { registrationHistoryKey } from './useRegistrationHistory';
+import { gainsDailyKey, gainsSummaryKey } from './useGains';
 import { registrationStatusErrorMessage } from '../lib/registration-errors';
 import { supabase } from '../lib/supabase';
 import type { RegistrationStatus } from '../types/database';
@@ -52,6 +53,8 @@ export function useSetRegistrationStatus() {
         queryClient.invalidateQueries({ queryKey: recentRegistrationsKey }),
         queryClient.invalidateQueries({ queryKey: unconfirmedReceiverResultsKey }),
         queryClient.invalidateQueries({ queryKey: registrationHistoryKey(registrationId) }),
+        queryClient.invalidateQueries({ queryKey: gainsSummaryKey }),
+        queryClient.invalidateQueries({ queryKey: gainsDailyKey }),
       ]);
     },
   });
