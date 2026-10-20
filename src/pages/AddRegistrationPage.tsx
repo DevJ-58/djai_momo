@@ -10,9 +10,11 @@ import { PasteRegistrationPanel } from '../components/registrations/PasteRegistr
 import { useAddRegistration } from '../hooks/useAddRegistration';
 import { useToast } from '../hooks/use-toast';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { useReportDayStats } from '../hooks/useDayReports';
 import { identifierSchema } from '../lib/parseIdentifier';
 import { numeroSchema, parseNumero } from '../lib/numero';
 import { descriptionSchema } from '../lib/description';
+import { getDayBounds } from '../lib/day-reports';
 
 const addRegistrationSchema = z.object({
   email: identifierSchema,
@@ -49,6 +51,8 @@ export function AddRegistrationPage() {
     queryMode === 'saisie' || queryMode === 'coller' ? queryMode : readStoredMode();
   const mutation = useAddRegistration();
   const online = useOnlineStatus();
+  const today = getDayBounds().today;
+  const todayStats = useReportDayStats({ from: today, to: today });
   const { toasts, show, dismiss } = useToast();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [addedCount, setAddedCount] = useState(0);
@@ -101,6 +105,9 @@ export function AddRegistrationPage() {
         </div>
         <Link className="back-to-registrations" to="/espace">Retour à mes enregistrés</Link>
       </header>
+      <Link className="add-today-report-link" to={`/espace/jours/${today}`}>
+        Rapport du jour ({todayStats.data?.[0]?.total ?? 0})
+      </Link>
 
       <Card className="add-registration-card">
         <div className="simulation-notice" role="note">

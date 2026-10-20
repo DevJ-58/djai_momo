@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CircleUserRound, ClipboardList, LayoutDashboard, LogOut, Plus, Sparkles, Users } from 'lucide-react';
+import { CalendarDays, CircleUserRound, ClipboardList, LayoutDashboard, LogOut, Plus, Sparkles, Users } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
@@ -22,13 +22,15 @@ type NavigationItem = {
 
 const adminNavigation: NavigationItem[] = [
   { label: 'Tableau de bord', mobileLabel: 'Tableau', to: '/admin', icon: LayoutDashboard },
-  { label: 'Utilisateurs', mobileLabel: 'Utilisateurs', to: '/admin/utilisateurs', icon: Users },
-  { label: 'Enregistrés', mobileLabel: 'Enregistrés', to: '/admin/enregistres', icon: ClipboardList },
+  { label: 'Utilisateurs', mobileLabel: 'Agents', to: '/admin/utilisateurs', icon: Users },
+  { label: 'Enregistrés', mobileLabel: 'Liste', to: '/admin/enregistres', icon: ClipboardList },
+  { label: 'Jours', mobileLabel: 'Jours', to: '/admin/jours', icon: CalendarDays },
 ];
 
 const agentNavigation: NavigationItem[] = [
-  { label: 'Mes enregistrés', mobileLabel: 'Enregistrés', to: '/espace', icon: ClipboardList },
+  { label: 'Mes enregistrés', mobileLabel: 'Liste', to: '/espace', icon: ClipboardList },
   { label: 'Ajouter', mobileLabel: 'Ajouter', to: '/espace/ajouter', icon: Plus },
+  { label: 'Mes jours', mobileLabel: 'Jours', to: '/espace/jours', icon: CalendarDays },
 ];
 
 export function AppShell() {

@@ -201,9 +201,10 @@ export function useUnconfirmedReceiverResults() {
   });
 }
 
-export function useAgentsOverview() {
+export function useAgentsOverview(enabled = true) {
   return useQuery({
     queryKey: agentsOverviewKey,
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .rpc('admin_agents_overview')

@@ -24,6 +24,7 @@ const SuspendedPage = lazy(() => import('./pages/SuspendedPage').then((module) =
 const AdminDashboardPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminDashboardPage })));
 const AdminAgentDetailPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminAgentDetailPage })));
 const AdminRegistrationsPlaceholderPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminRegistrationsPlaceholderPage })));
+const DayReportsPage = lazy(() => import('./pages/DayReportsPage').then((module) => ({ default: module.DayReportsPage })));
 const AdminUsersPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminUsersPage })));
 const ReceiverDashboardPage = lazy(() => import('./pages/ReceiverPages').then((module) => ({ default: module.ReceiverDashboardPage })));
 const ReceiverUserPage = lazy(() => import('./pages/ReceiverPages').then((module) => ({ default: module.ReceiverUserPage })));
@@ -45,12 +46,14 @@ function DocumentTitle() {
             : pathname === '/hors-ligne' ? 'Hors ligne'
               : pathname === '/espace' ? 'Mes enregistrés'
                 : pathname === '/espace/ajouter' ? 'Ajouter un enregistré'
+                  : pathname === '/espace/jours' || pathname.startsWith('/espace/jours/') ? 'Mes jours'
                   : pathname === '/receveur' ? 'Receveur'
                     : pathname.startsWith('/receveur/u/') ? 'Agent receveur'
                       : pathname === '/admin' ? 'Tableau de bord'
                         : pathname === '/admin/utilisateurs' ? 'Utilisateurs'
                           : pathname.startsWith('/admin/utilisateurs/') ? 'Détail utilisateur'
                             : pathname === '/admin/enregistres' ? 'Enregistrés'
+                              : pathname === '/admin/jours' || pathname.startsWith('/admin/jours/') ? 'Jours'
                               : pathname === '/design-system' ? 'Design system'
                                 : pathname === '/' ? 'Accueil'
                                   : 'Page introuvable';
@@ -103,6 +106,8 @@ root.render(
                     <Route element={<RequireRole role="agent" />}>
                       <Route path="/espace" element={<AgentRegistrationsPage />} />
                       <Route path="/espace/ajouter" element={<AddRegistrationPage />} />
+                      <Route path="/espace/jours" element={<DayReportsPage />} />
+                      <Route path="/espace/jours/:date" element={<DayReportsPage />} />
                     </Route>
                     <Route element={<RequireRole role="receveur" />}>
                       <Route path="/receveur" element={<ReceiverDashboardPage />} />
@@ -113,6 +118,8 @@ root.render(
                       <Route path="/admin/utilisateurs" element={<AdminUsersPage />} />
                       <Route path="/admin/utilisateurs/:id" element={<AdminAgentDetailPage />} />
                       <Route path="/admin/enregistres" element={<AdminRegistrationsPlaceholderPage />} />
+                      <Route path="/admin/jours" element={<DayReportsPage />} />
+                      <Route path="/admin/jours/:date" element={<DayReportsPage />} />
                     </Route>
                   </Route>
                 </Route>

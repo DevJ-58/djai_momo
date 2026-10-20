@@ -13,6 +13,7 @@ import {
   unconfirmedReceiverResultsKey,
 } from './useAdmin';
 import { registrationListKey, registrationStatsKey } from './useRegistrations';
+import { dayRegistrationsKey, reportDayStatsKey } from './useDayReports';
 
 export function useRealtimeSync() {
   const { profile } = useAuth();
@@ -22,6 +23,16 @@ export function useRealtimeSync() {
 
   useEffect(() => {
     if (!userId || !role) return;
+
+    let reportInvalidationTimer: number | undefined;
+    const scheduleReportInvalidation = () => {
+      window.clearTimeout(reportInvalidationTimer);
+      reportInvalidationTimer = window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: reportDayStatsKey });
+        void queryClient.invalidateQueries({ queryKey: dayRegistrationsKey });
+        void queryClient.invalidateQueries({ queryKey: ['earliest-report-day'] });
+      }, 1000);
+    };
 
     const channel = supabase.channel(`realtime-sync-${userId}`);
     const receiverChannel = role === 'receveur'
@@ -48,6 +59,7 @@ export function useRealtimeSync() {
           filter: `agent_id=eq.${userId}`,
         },
         () => {
+          scheduleReportInvalidation();
           void queryClient.invalidateQueries({ queryKey: registrationListKey });
           void queryClient.invalidateQueries({ queryKey: registrationStatsKey });
           void queryClient.invalidateQueries({ queryKey: ['registrations', 'detail'] });
@@ -63,7 +75,8 @@ export function useRealtimeSync() {
             table: 'registrations',
           },
           () => {
-            void queryClient.invalidateQueries({ queryKey: adminRegistrationsKey });
+              scheduleReportInvalidation();
+              void queryClient.invalidateQueries({ queryKey: adminRegistrationsKey });
             void queryClient.invalidateQueries({ queryKey: ['admin', 'agent-registrations'] });
             void queryClient.invalidateQueries({ queryKey: adminStatsKey });
             void queryClient.invalidateQueries({ queryKey: agentsOverviewKey });
@@ -115,6 +128,7 @@ export function useRealtimeSync() {
       .subscribe();
 
     return () => {
+      window.clearTimeout(reportInvalidationTimer);
       void supabase.removeChannel(channel);
     };
   }, [queryClient, role, userId]);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   Activity,
   ArrowLeft,
+  CalendarDays,
   Check,
   Clock3,
   CircleDollarSign,
@@ -25,6 +26,7 @@ import { RegistrationDetails, RegistrationRecordList } from '../components/regis
 import { ExportPdfModal } from '../components/exports/ExportPdfModal';
 import { ExportCsvModal } from '../components/exports/ExportCsvModal';
 import { WhatsAppExportModal } from '../components/exports/WhatsAppExportModal';
+import { AgentDayReportsSection } from '../components/admin/AgentDayReportsSection';
 import {
   Avatar,
   ActionMenu,
@@ -954,6 +956,8 @@ export function AdminAgentDetailPage() {
         <StatCard label="Montant payé" value={formatAmount(accountOverview.montant_total)} icon={<Wallet size={20} aria-hidden="true" />} />
       </section>
 
+      <AgentDayReportsSection agentId={id} returnTo={`/admin/utilisateurs/${id}`} />
+
       <section className="registration-list-section" aria-labelledby="admin-agent-registration-title">
         <div className="registration-list-heading">
           <div>
@@ -1173,6 +1177,9 @@ export function AdminRegistrationsPlaceholderPage() {
           <p>Tous les enregistrements, tous utilisateurs confondus.</p>
         </div>
         <div className="registration-export-actions">
+          <Link className="button button-secondary" to="/admin/jours">
+            <CalendarDays size={17} aria-hidden="true" /> Par jour
+          </Link>
           <Button className="registration-export-desktop" variant="secondary" onClick={() => setExportPdfOpen(true)}>
             <FileDown size={17} aria-hidden="true" /> Exporter en PDF
           </Button>
